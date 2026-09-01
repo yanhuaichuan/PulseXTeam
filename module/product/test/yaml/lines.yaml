@@ -1,0 +1,36 @@
+title: common product line data
+desc: "产品线公用数据"
+author: zhouxin
+version: "1.0"
+fields:
+  - field: id
+    range: 1-100
+  - field: root
+    range: 1-10{5}
+  - field: branch
+    range: 0{28},1{2},4{5},7,8,9{3},0{60}
+  - field: name
+    range: 1-100
+    prefix: "产品线"
+  - field: parent
+    range: 0
+  - field: path
+    range: 1-100
+    prefix: ","
+    postfix: ","
+  - field: grade
+    range: 1
+  - field: order
+    range: 10-1000:10
+  - field: type
+    range: line
+  - field: from
+    range: 0
+  - field: owner
+    range: ''
+  - field: collector
+    range: ''
+  - field: short
+    range: ''
+  - field: deleted
+    range: 0

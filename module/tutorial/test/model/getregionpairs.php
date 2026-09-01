@@ -1,0 +1,33 @@
+#!/usr/bin/env php
+<?php
+
+/**
+
+title=测试 tutorialModel::getRegionPairs();
+timeout=0
+cid=19458
+
+- 步骤1：正常情况，验证返回默认区域属性1 @默认区域
+- 步骤2：验证返回数组数量 @1
+- 步骤3：验证数组键为1 @1
+- 步骤4：验证返回类型为数组 @1
+- 步骤5：验证幂等性 @1
+
+*/
+
+// 1. 导入依赖（路径固定，不可修改）
+include dirname(__FILE__, 5) . '/test/lib/init.php';
+include dirname(__FILE__, 2) . '/lib/model.class.php';
+
+// 2. 用户登录（选择合适角色）
+su('admin');
+
+// 3. 创建测试实例（变量名与模块名一致）
+$tutorialTest = new tutorialModelTest();
+
+// 4. 🔴 强制要求：必须包含至少5个测试步骤
+r($tutorialTest->getRegionPairsTest()) && p('1') && e('默认区域'); // 步骤1：正常情况，验证返回默认区域
+r(count($tutorialTest->getRegionPairsTest())) && p() && e('1'); // 步骤2：验证返回数组数量
+r(array_keys($tutorialTest->getRegionPairsTest())) && p('0') && e('1'); // 步骤3：验证数组键为1
+r(is_array($tutorialTest->getRegionPairsTest())) && p() && e('1'); // 步骤4：验证返回类型为数组
+r($tutorialTest->getRegionPairsTest() === $tutorialTest->getRegionPairsTest()) && p() && e('1'); // 步骤5：验证幂等性

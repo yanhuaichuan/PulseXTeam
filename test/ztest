@@ -1,0 +1,77 @@
+#!/usr/bin/env php
+<?php
+include 'lib/utils.php';
+
+$moduleList = array('mapi', 'action', 'admin', 'block', 'branch', 'bug', 'build', 'caselib', 'ci', 'company', 'compile', 'cron', 'custom', 'datatable', 'dept', 'design', 'dev', 'entry', 'doc', 'file', 'execution', 'git', 'group', 'jenkins', 'job', 'kanban', 'message', 'my', 'personnel', 'product', 'projectstory', 'projectrelease', 'release', 'productplan', 'program', 'programplan', 'project', 'pipeline', 'holiday', 'report', 'score', 'sso', 'setting', 'stage', 'stakeholder', 'search', 'story', 'task', 'testcase', 'todo', 'tutorial', 'mail', 'tree', 'user', 'weekly', 'gitlab', 'gitea', 'gogs', 'webhook', 'repo');
+
+$P1 = array('action', 'admin', 'api', 'block', 'branch', 'bug', 'build', 'caselib', 'ci', 'company', 'compile', 'cron', 'custom', 'datatable','holiday');
+$P2 = array('dev', 'doc', 'entry', 'execution', 'extension', 'file');
+$P3 = array('kanban', 'mail', 'message', 'misc', 'mr', 'my', 'personnel', 'pipeline', 'product', 'productplan');
+$P4 = array('project', 'projectrelease', 'projectstory', 'release', 'report', 'score', 'search', 'setting', 'sonarqube', 'sso', 'stage', 'stakeholder');
+$P5 = array('story', 'task', 'testcase', 'testreport', 'testsuite', 'testtask', 'todo', 'program', 'programplan');
+$P6 = array('tree', 'tutorial', 'user', 'webhook', 'weekly', 'dept', 'design', 'group', 'repo', 'job');
+$P7 = array('git', 'gitea', 'gitlab', 'jenkins', 'gogs');
+
+if(count($argv) <= 1) die(printUsage());
+
+if(in_array($argv[1], $moduleList))
+{
+    ztfRun($argv[1]);
+}
+else
+{
+    switch($argv[1])
+    {
+    case 'init':
+        zdRun();
+        break;
+    case 'devdata':
+        zdRun(true);
+        break;
+    case 'batchInit':
+        batchInitDB(10);
+        break;
+    case 'extract':
+        ztfExtract('api');
+        ztfExtract('model');
+        break;
+    case 'api':
+        ztfRun('api');
+        break;
+    case 'control':
+        ztfRun('control');
+        break;
+    case 'model':
+        ztfRun('model');
+        break;
+    case 'concurrency':
+        ztfRun('model', 50);
+        break;
+    case 'P1':
+        ztfRun($P1);
+        break;
+    case 'P2':
+        ztfRun($P2);
+        break;
+    case 'P3':
+        ztfRun($P3);
+        break;
+    case 'P4':
+        ztfRun($P4);
+        break;
+    case 'P5':
+        ztfRun($P5);
+        break;
+    case 'P6':
+        ztfRun($P6);
+        break;
+    case 'P7':
+        ztfRun($P7);
+        break;
+
+    default:
+        ztfExtract($argv[1]);
+        system("php " . $argv[1]);
+    }
+}
+

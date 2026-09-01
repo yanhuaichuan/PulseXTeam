@@ -1,0 +1,142 @@
+title: table zt_nc
+desc: ""
+author: automated export
+version: "1.0"
+fields:
+  - field: id
+    note: "ID"
+    range: 1-10000
+    prefix: ""
+    postfix: ""
+    loop: 0
+    format: ""
+  - field: auditplan
+    note: ""
+    prefix: ""
+    postfix: ""
+    loop: 0
+    loopfix: ""
+    format: ""
+  - field: listID
+    note: ""
+    prefix: ""
+    postfix: ""
+    loop: 0
+    loopfix: ""
+    format: ""
+  - field: title
+    note: ""
+    prefix: ""
+    postfix: ""
+    loop: 0
+    loopfix: ""
+    format: ""
+  - field: desc
+    note: ""
+    prefix: ""
+    postfix: ""
+    loop: 0
+    loopfix: ""
+    format: ""
+  - field: type
+    note: ""
+    prefix: ""
+    postfix: ""
+    loop: 0
+    loopfix: ""
+    format: ""
+  - field: status
+    note: ""
+    prefix: ""
+    postfix: ""
+    loop: 0
+    loopfix: ""
+    format: ""
+  - field: severity
+    note: ""
+    prefix: ""
+    postfix: ""
+    loop: 0
+    loopfix: ""
+    format: ""
+  - field: deadline
+    note: "截至日期"
+    range: "(M)-(w)"
+    type: timestamp
+    format: "YY-MM-DD"
+  - field: resolvedBy
+    note: ""
+    prefix: ""
+    postfix: ""
+    loop: 0
+    loopfix: ""
+    format: ""
+  - field: resolution
+    note: ""
+    prefix: ""
+    postfix: ""
+    loop: 0
+    loopfix: ""
+    format: ""
+  - field: resolvedDate
+    note: "解决日期"
+    range: "(M)-(w)"
+    type: timestamp
+    format: "YY-MM-DD"
+  - field: closedBy
+    note: ""
+    prefix: ""
+    postfix: ""
+    loop: 0
+    loopfix: ""
+    format: ""
+  - field: closedDate
+    note: "关闭日期"
+    range: "(M)-(w)"
+    type: timestamp
+    format: "YY-MM-DD"
+  - field: parent
+    note: ""
+    prefix: ""
+    postfix: ""
+    loop: 0
+    loopfix: ""
+    format: ""
+  - field: assignedTo
+    note: ""
+    prefix: ""
+    postfix: ""
+    loop: 0
+    loopfix: ""
+    format: ""
+  - field: createdBy
+    note: ""
+    prefix: ""
+    postfix: ""
+    loop: 0
+    loopfix: ""
+    format: ""
+  - field: createdDate
+    note: "创建日期"
+    range: "(M)-(w)"
+    type: timestamp
+    format: "YY-MM-DD"
+  - field: editedBy
+    note: ""
+    prefix: ""
+    postfix: ""
+    loop: 0
+    loopfix: ""
+    format: ""
+  - field: editedDate
+    note: "编辑日期"
+    range: "(M)-(w)"
+    type: timestamp
+    format: "YY-MM-DD"
+  - field: deleted
+    note: ""
+    prefix: ""
+    postfix: ""
+    loop: 0
+    loopfix: ""
+    format: ""

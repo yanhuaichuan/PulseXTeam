@@ -1,0 +1,20 @@
+.think-result-content .form-control {background: var(--color-canvas) !important; cursor: unset !important;}
+.think-result-content .step-title>div>*, .think-result-content .form-group .icon {display: none;}
+.think-result-content .think-check-list .item-control:not(.is-checked):hover {border-color: inherit;}
+.think-result-content textarea.form-control {resize: none;}
+
+.think-result-content .bg-think-blue-100 {background-color: #cfe7fe;}
+.think-result-content .text-think-blue {color: #2294FB;}
+.think-result-content .bg-think-yellow-100 {background-color: #FFF2D9;}
+.think-result-content .text-think-yellow {color: #FAAE1A;}
+.think-result-content .think-blue-outline {--skin-ring: #2294FB;}
+.think-result-content .special-outline {--skin-text: unset; --skin-bg: var(--color-special-100);}
+.think-result-content .success-outline {--skin-text: unset; --skin-bg: var(--color-success-100);}
+.think-result-content .warning-outline {--skin-text: unset; --skin-bg: var(--color-warning-100);}
+.think-result-content .important-outline {--skin-text: unset; --skin-bg: var(--color-important-100);}
+.bg-success-100 {background-color: var(--color-success-100);}
+.bg-special-100 {background-color: var(--color-special-100);}
+.bg-important-100 {background-color: var(--color-important-100);}
+.bg-warning-100 {background-color: var(--color-warning-100);}
+.px-12 {padding-left: 3rem; padding-right: 3rem;}
+.think-result-content .is-view .item-step-title {font-size: 1.75rem; min-height: 60px;}

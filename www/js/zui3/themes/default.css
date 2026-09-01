@@ -1,0 +1,13 @@
+@import './common.css';
+
+:root
+{
+  --zt-menu-bg: var(--color-gray-900)!important;
+  --zt-menu-hover-bg: var(--color-primary-600);
+  --zt-menu-active-bg: var(--color-primary-500);
+  --zt-header-bg: var(--color-primary-500);
+  --zt-header-color: var(--color-canvas);
+  --zt-navbar-active-color: var(--color-canvas);
+}
+#toolbar > #pageToolbar + .toolbar > .btn {background-color: rgba(var(--color-canvas-rgb), 0.1); color: var(--color-primary-50);}
+#navbar>.nav>.nav-item>a.active>.text {box-shadow: inset 0 -2px 0 var(--color-primary-200);}

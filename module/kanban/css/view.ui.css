@@ -1,0 +1,41 @@
+.as-subtitle {color: rgb(139, 145, 162); opacity: 0.5; text-wrap: nowrap}
+#toolbar .btn-group .btn{border:none}
+#kanbanActionMenu {color: #333; padding: 8px}
+.colorbox {width: 108px;}
+[lang^=zh] .colorbox {width: 88px;}
+.cardcolor {width: 36px; height: 14px; float: left; margin-right: 5px; margin-top: 2px; border-radius: 2px; border: 1px solid rgb(176, 176, 176) }
+.card-title {color: var(--color-black-rgb); }
+.card-icon {opacity: 1;}
+.color-937c5a > .card { background-color: #937c5a !important; color: #fff !important}
+.color-ff9f46 > .card { background-color: #ff9f46 !important; color: #fff !important}
+.color-fc5959 > .card { background-color: #fc5959 !important; color: #fff !important}
+.color-937c5a > .card a, .color-ff9f46 > .card a, .color-fc5959 > .card a { color: inherit !important }
+.color-937c5a > .card span.label.gray-pale, .color-ff9f46 > .card span.label.gray-pale, .color-fc5959 > .card span.label.gray-pale { color: inherit !important }
+.progress {height: 0.5rem !important}
+.kanban-header-title .as-subtitle {font-weight: 700;}
+.kanban-header-title .text-danger {color:rgb(255, 93, 93); opacity: 1;}
+
+.regionMenu {display: inline-flex; border-bottom: none; margin-bottom: -3px; width: 100%; overflow-y: auto; padding-left: 0;}
+.regionMenu li {text-align: center; float: left; position: relative; display: block;}
+.regionMenu li a {min-width: 134px; overflow: hidden; white-space: nowrap; z-index: 0; position: relative; padding: 0.8rem; margin-left: -10px; background: none; outline: 0; cursor: pointer !important; display: block; color: rgba(var(--color-black-rgb),var(--tw-text-opacity))}
+.regionMenu li:first-child > a {margin-left: 0px}
+.regionMenu li a:before {content: ""; position: absolute; top: -0.2rem; left: 0; background: #EFF1F3; height: 100%; width: 100%; z-index: -1; border-top-left-radius: 1rem; border-top-right-radius: 1rem; transform: perspective(0.5rem) rotateX(2deg); transform-origin: bottom;}
+.regionMenu li.active > a {z-index: 1; color: rgba(var(--color-primary-500-rgb),var(--tw-text-opacity));}
+.regionMenu li.active > a:before {background: #fff}
+.regionMenu li a:hover {color: rgba(var(--color-primary-500-rgb),var(--tw-text-opacity));}
+.regionMenu li a span {vertical-align: bottom; overflow: hidden; max-width: 6em; white-space: nowrap; display: inline-block;}
+.card-suffix.label {min-width: 46px;}
+
+.label-wait      {background-color: rgba(var(--color-gray-100-rgb),var(--tw-bg-opacity));    color: rgba(var(--color-gray-500-rgb),var(--tw-text-opacity));    --tw-ring-color: rgba(var(--color-gray-500-rgb),var(--tw-ring-opacity));}
+.label-doing     {background-color: rgba(var(--color-danger-100-rgb),var(--tw-bg-opacity));  color: rgba(var(--color-danger-500-rgb),var(--tw-text-opacity));  --tw-ring-color: rgba(var(--color-danger-500-rgb),var(--tw-ring-opacity));}
+.label-suspended {background-color: rgba(var(--color-warning-100-rgb),var(--tw-bg-opacity));    color: rgba(var(--color-warning-500-rgb),var(--tw-text-opacity));    --tw-ring-color: rgba(var(--color-warning-500-rgb),var(--tw-ring-opacity));}
+.label-future    {background-color: rgba(var(--color-gray-100-rgb),var(--tw-bg-opacity));    color: rgba(var(--color-gray-500-rgb),var(--tw-text-opacity));    --tw-ring-color: rgba(var(--color-gray-500-rgb),var(--tw-ring-opacity));}
+.label-done      {background-color: rgba(var(--color-success-100-rgb),var(--tw-bg-opacity)); color: rgba(var(--color-success-500-rgb),var(--tw-text-opacity)); --tw-ring-color: rgba(var(--color-success-500-rgb),var(--tw-ring-opacity));}
+.label-closed    {background-color: rgba(var(--color-gray-100-rgb),var(--tw-bg-opacity));    color: rgba(var(--color-gray-500-rgb),var(--tw-text-opacity));    --tw-ring-color: rgba(var(--color-gray-500-rgb),var(--tw-ring-opacity));}
+.label-normal    {background-color: rgba(var(--color-success-100-rgb),var(--tw-bg-opacity)); color: rgba(var(--color-success-500-rgb),var(--tw-text-opacity)); --tw-ring-color: rgba(var(--color-success-500-rgb),var(--tw-ring-opacity));}
+.label-deleted   {background-color: rgba(var(--color-danger-100-rgb),var(--tw-bg-opacity));  color: rgba(var(--color-danger-500-rgb),var(--tw-text-opacity));  --tw-ring-color: rgba(var(--color-danger-500-rgb),var(--tw-ring-opacity));}
+
+#kanbanList.is-in-fullscreen {background: var(--color-canvas);}
+#kanbanList.is-in-fullscreen .kanban-list {height: 100%}
+#kanbanList.is-in-fullscreen .btn {display: none;}
+.is-collapsed .icon-angle-top:before { content: "\e313"; }

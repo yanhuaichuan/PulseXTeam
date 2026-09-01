@@ -1,0 +1,26 @@
+title: zt_stakeholder
+desc: 干系人表
+author: Shujie Tian
+version: 1.0
+fields:
+  - field: id
+    range: "1-100"
+  - field: objectID
+    range: "1{10},11{10},60{10}"
+  - field: objectType
+    range: "program{10},project{20}"
+  - field: user
+    note: "用户名"
+    fields:
+    - field: account1
+      range: admin,user{19}
+    - field: account2
+      range: "[],1-19"
+  - field: type
+    range: "inside{5},outside{5}"
+  - field: key
+    range: '0,1'
+  - field: from
+    range: "team{5},company{2},outside{3}"
+  - field: deleted
+    range: 0

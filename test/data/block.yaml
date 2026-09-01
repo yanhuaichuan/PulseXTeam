@@ -1,0 +1,6 @@
+title: zt_block
+author: Tian shujie
+version: "1.0"
+fields:
+  - field: id
+    range: 1-10000

@@ -1,0 +1,12 @@
+title: zt_host
+author: Zeng gang
+version: "1.0"
+fields:
+  - field: id
+    range: 1
+  - field: hostType
+    range: virtual
+  - field: osName
+    range: linux
+  - field: status
+    range: online

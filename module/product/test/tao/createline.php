@@ -1,0 +1,29 @@
+#!/usr/bin/env php
+<?php
+
+/**
+
+title=productModel->createLine();
+cid=17533
+
+- 执行product模块的createLineTest方法，参数是'1', 'test line1'
+ - 属性root @1
+ - 属性name @test line1
+- 执行product模块的createLineTest方法，参数是'-1', 'test line1'  @0
+- 执行product模块的createLineTest方法，参数是'1', ''  @0
+- 执行product模块的createLineTest方法，参数是'1', "<script>alert
+ - 属性root @1
+ - 属性name @<script>alert('test')</script>
+
+*/
+include dirname(__FILE__, 5) . '/test/lib/init.php';
+include dirname(__FILE__, 2) . '/lib/tao.class.php';
+
+zenData('module')->gen(1);
+
+$product = new productTaoTest();
+
+r($product->createLineTest('1',  'test line1')) && p('root,name') && e('1,test line1');
+r($product->createLineTest('-1', 'test line1')) && p() && e('0');
+r($product->createLineTest('1', '')) && p() && e('0');
+r($product->createLineTest('1', "<script>alert('test')</script>")) && p('root,name') && e("1,<script>alert('test')</script>");

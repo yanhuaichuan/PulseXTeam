@@ -1,0 +1,158 @@
+<?php
+declare(strict_types=1);
+namespace zin;
+global $lang, $config, $app;
+
+$app->loadLang('program');
+$fields = defineFieldList('project');
+
+$model          = data('model');
+$hasCode        = !empty($config->setCode);
+$currency       = data('parentProgram') ? data('parentProgram.budgetUnit') : $config->project->defaultCurrency;
+$disableStageBy = !empty(data('executions')) || data('app.rawMethod') == 'edit' || !empty(data('copyProject'));
+
+$fields->field('parent')
+    ->control('picker', array('required' => true))
+    ->labelHint(common::isTutorialMode() ? null : $lang->program->tips)
+    ->hidden(data('globalDisableProgram') || !helper::hasFeature('program'))
+    ->items(data('programList'));
+
+$fields->field('model')->control('hidden')->value($model);
+
+if(!$hasCode)
+{
+    $fields->field('hasProduct')
+        ->label($lang->project->category)
+        ->control('checkBtnGroup')
+        ->items($lang->project->projectTypeList);
+}
+
+$fields->field('name')
+    ->wrapBefore()
+    ->required()
+    ->control('input');
+
+if($hasCode)
+{
+    $fields->field('hasProduct')
+        ->control('checkBtnGroup')
+        ->label($lang->project->category)
+        ->items($lang->project->projectTypeList);
+
+    $fields->field('code')->control('input');
+}
+
+$fields->field('PM')->control('picker')->items(data('PMUsers'));
+
+unset($lang->project->endList[999]);
+$isLongTime = data('project.end') == LONG_TIME;
+$copyProject = data('copyProject');
+if($copyProject)
+{
+    $beginValue = $copyProject->begin;
+    $endValue   = $copyProject->end == LONG_TIME ? '' : $copyProject->end;
+}
+else
+{
+    $beginValue = data('project.begin') ? data('project.begin') : date('Y-m-d');
+    $endValue   = data('project.end') == LONG_TIME ? '' : data('project.end');
+}
+
+$fields->field('begin')
+    ->label($lang->project->planDate)
+    ->required()
+    ->control('inputGroup')
+    ->itemBegin('dateRangePicker')
+    ->control('dateRangePicker')
+    ->beginName('begin')
+    ->beginPlaceholder($lang->project->begin)
+    ->beginValue($beginValue)
+    ->endName('end')
+    ->endPlaceholder($lang->project->end)
+    ->endValue($endValue)
+    ->endDisabled($isLongTime)
+    ->endList($lang->project->endList)
+    ->itemEnd()
+    ->tip(' ')
+    ->tipProps(array('id' => 'dateTip'))
+    ->tipClass('text-warning' . (data('copyProject') ? '' : ' hidden'));
+
+$fields->field('days')->label($lang->project->days . $lang->project->daysUnit)->control('input')->disabled($isLongTime)->value(!empty(data('project.days')) ? data('project.days') : '');
+
+$fields->field('productsBox')
+    ->id('productsBox')
+    ->width('full')
+    ->required(data('copyProject.parent') || data('parentProgram.id') || data('project.parent'))
+    ->control(array
+    (
+        'control'           => 'productsBox',
+        'productItems'      => data('allProducts'),
+        'branchGroups'      => data('branchGroups'),
+        'planGroups'        => data('productPlans'),
+        'productPlans'      => data('productPlans'),
+        'linkedProducts'    => data('linkedProducts'),
+        'linkedBranches'    => data('linkedBranches'),
+        'project'           => data('project') ? data('project') : data('copyProject'),
+        'hasNewProduct'     => data('app.rawMethod') == 'create',
+        'isStage'           => data('isStage'),
+        'errorSameProducts' => $lang->project->errorSameProducts,
+        'selectTip'         => $lang->project->selectProductTip
+    ));
+
+if($model == 'waterfall' || $model == 'waterfallplus')
+{
+    $stageByValue = data('project.stageBy') ? data('project.stageBy') : 'project';
+    $fields->field('stageBy')
+        ->className('stageByBox', data('linkedProducts') && count(data('linkedProducts')) > 1 ? '' : 'hidden')
+        ->control('radioListInline')
+        ->labelHint($lang->project->stageByTips)
+        ->label($lang->project->stageBy)
+        ->value(data('copyProject') ? data('copyProject.stageBy') : $stageByValue)
+        ->disabled($disableStageBy)
+        ->items($lang->project->stageByList);
+}
+
+$fields->field('desc')
+    ->width('full')
+    ->control('editor');
+
+$budgetFuture   = data('project.budget') !== null && !data('project.budget');
+$budgetItemList = array();
+$budgetUnitList = data('budgetUnitList') ? data('budgetUnitList') : array();
+foreach($budgetUnitList as $key => $value)
+{
+    $budgetItemList[] = array('text' => $value, 'value' => $key, 'url' => "javascript:toggleBudgetUnit('{$key}')");
+}
+
+$budgetHidden = isset($config->project->{$app->rawMethod}->requiredFields) && strpos($config->project->{$app->rawMethod}->requiredFields, 'budget') !== false;
+$budgetFuture = data('project.budget') !== null && !data('project.budget') && !$budgetHidden;
+$fields->field('budget')
+    ->label($lang->project->budget)
+    ->control('inputControl', array('control' => 'input', 'name' => 'budget', 'prefix' => array('control' => 'dropdown', 'name' => 'budgetUnit', 'items' => $budgetItemList, 'widget' => true, 'text' => zget($lang->project->currencySymbol, data('project.budgetUnit') ? data('project.budgetUnit') : $currency), 'className' => 'ghost'), 'prefixWidth' => 34, 'disabled' => $budgetFuture))
+    ->placeholder(data('parentProgram') && !empty(data('parentProgram.budget')) ? $lang->project->parentBudget . zget($lang->project->currencySymbol, $currency) . data('parentProgram.budget') : '')
+    ->tip(' ')
+    ->tipProps(array('id' => 'budgetTip'))
+    ->tipClass('text-danger');
+if(!$budgetHidden) $fields->field('budget')->checkbox(array('text' => $lang->project->future, 'name' => 'future', 'checked' => $budgetFuture));
+
+$fields->field('budgetUnit')->control('hidden')->value($currency);
+
+$fields->field('acl')
+    ->width('full')
+    ->wrapBefore();
+
+$fields->field('auth')
+    ->width('full')
+    ->wrapBefore()
+    ->control('radioList')
+    ->items($lang->project->authList);
+
+$storyTypeList = array();
+foreach($lang->story->typeList as $key => $text)
+{
+    $disabled = $key == 'story' ? true : false;
+    $storyTypeList[] = array('text' => $text, 'value' => $key, 'disabled' => $disabled);
+}
+
+$fields->field('taskDateLimit')->control(array('control' => 'radioList', 'items' => $lang->project->taskDateLimitList, 'name' => 'taskDateLimit'));
+$fields->field('storyType')->control(array('control' => 'checkBox', 'items' => $storyTypeList, 'name' => 'storyType[]'));

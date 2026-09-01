@@ -1,0 +1,10 @@
+title: zt_user
+author: Zhaoke
+version: "1.0"
+fields:
+- field: id
+  range: 1-100
+- field: realname
+  range: 1-100
+  prefix: '开发'
+

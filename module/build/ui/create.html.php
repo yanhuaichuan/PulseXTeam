@@ -1,0 +1,300 @@
+<?php
+declare(strict_types=1);
+/**
+ * The create view file of build module of ZenTaoPMS.
+ * @copyright   Copyright 2009-2023 禅道软件（青岛）有限公司(ZenTao Software (Qingdao) Co., Ltd. www.zentao.net)
+ * @license     ZPL(https://zpl.pub/page/zplv12.html) or AGPL(https://www.gnu.org/licenses/agpl-3.0.en.html)
+ * @author      Shujie Tian<tianshujie@easycorp.ltd>
+ * @package     build
+ * @link        https://www.zentao.net
+ */
+namespace zin;
+
+/* zin: Set variables to define picker options for form. */
+jsVar('multipleProject', !empty($multipleProject));
+jsVar('multipleSelect', $lang->build->placeholder->multipleSelect);
+jsVar('autoRelationTip', $lang->build->notice->autoRelation);
+jsVar('projectID', $projectID);
+jsVar('executionID', $executionID);
+jsVar('today', helper::today());
+jsVar('projectModel', isset($project->model) ? $project->model : '');
+jsVar('currentProduct', $productID);
+jsVar('hidden', $hidden);
+
+$integratedRow = '';
+if($app->tab == 'project' && !empty($multipleProject))
+{
+    $integratedRow = formRow(
+        formGroup
+        (
+            set::width('1/2'),
+            set::label($lang->build->integrated),
+            radioList
+            (
+                set::name('isIntegrated'),
+                set::items($lang->build->isIntegrated),
+                set::value('no'),
+                set::inline(true)
+            )
+        )
+    );
+}
+
+$executionRow = formRow
+(
+    formGroup
+    (
+        set::width('1/2'),
+        set::label($lang->executionCommon),
+        set::required(true),
+        set::hidden(empty($multipleProject)),
+        picker
+        (
+            set::name('execution'),
+            set::value($executionID),
+            set::items($executions),
+            set::required(true),
+            !empty($multipleProject) ? on::change('loadProducts') : null
+        )
+    )
+);
+
+$productRow   = '';
+$noProductRow = '';
+if(!$hidden)
+{
+    $productRow = formRow(
+        setID('productRow'),
+        set::hidden(empty($products) && $executionID),
+        formGroup(
+            set::width('1/2'),
+            set::name('product'),
+            set::label($lang->build->product),
+            set::value(empty($product) ? '' : $product->id),
+            set::items($products),
+            set::required(true),
+            on::change('loadBranches')
+        )
+    );
+    $noProductRow = formRow(
+        setID('noProductRow'),
+        set::hidden(!empty($products) || !$executionID),
+        formGroup
+        (
+            set::width('1/2'),
+            setClass('items-center'),
+            set::label($lang->build->product),
+            html(sprintf($lang->build->noProduct, helper::createLink('execution', 'manageproducts', "executionID={$executionID}", '', true), $app->tab))
+        )
+    );
+}
+else
+{
+    $productRow = formRow
+        (
+            setClass('hidden'),
+            formGroup
+            (
+                set::width('1/2'),
+                set::name('product'),
+                set::label($lang->build->product),
+                set::value(empty($product) ? '' : $product->id),
+            )
+        );
+}
+
+if(empty($product)) $product = new stdclass();
+$productType     = zget($product, 'type', 'normal');
+$productBranches = zget($product, 'branches', array());
+
+formPanel
+(
+    set::title($lang->build->create),
+    set::titleClass('text-lg gap-0'),
+    to::titleSuffix
+    (
+        btn(setClass('ghost'), icon('help'), set::hint($lang->help), set::url('https://www.zentao.net/book/zentaopms/build-copy-1529.html'), set::target('_blank'))
+    ),
+    set::formID('createBuildForm'),
+    on::change('[name=newSystem]', 'setSystemBox'),
+    on::change('[name=system]', 'loadBuilds'),
+    on::init('[name=system]')->do("setTimeout('loadSystem()', 50)"),
+    on::change('[name=product]', 'loadSystem'),
+    setClass('form-build'),
+    $integratedRow,
+    $executionRow,
+    $productRow,
+    $noProductRow,
+    formRow
+    (
+        setClass(!empty($product) && $productType != 'normal' ? '' : 'hidden'),
+        formGroup
+        (
+            set::width('1/2'),
+            set::label($lang->product->branchName['branch']),
+            picker
+            (
+                set::emptyValue(''),
+                set::name('branch[]'),
+                set::value(key($productBranches)),
+                set::items($branches),
+                set::multiple(true)
+            )
+        )
+    ),
+    formRow
+    (
+        formGroup
+        (
+            set::width('1/2'),
+            set::label($lang->build->system),
+            set::required(true),
+            inputGroup
+            (
+                div
+                (
+                    setClass('w-full'),
+                    setId('systemBox'),
+                    picker
+                    (
+                        set::name('system'),
+                        set::required(true),
+                        set::items(array())
+                    ),
+                    input(set::name('systemName'), setClass('hidden'))
+                ),
+                common::hasPriv('system', 'create') ? div
+                (
+                    setClass('input-group-addon flex'),
+                    checkbox
+                    (
+                        set::name('newSystem'),
+                        set::text($lang->build->addSystem)
+                    )
+                ) : null
+            )
+        )
+    ),
+    formRow
+    (
+        setClass('hidden'),
+        formGroup
+        (
+            set::width('1/2'),
+            set::label($lang->build->builds),
+            picker
+            (
+                setID('builds'),
+                set::name('builds[]'),
+                set::items(array()),
+                set::multiple(true)
+            )
+        ),
+        formGroup
+        (
+            set::width('1/2'),
+            setClass('pl-4 items-center'),
+            icon(
+                'help',
+                set('data-toggle', 'tooltip'),
+                setID('tooltipHover')
+            )
+        )
+    ),
+    formRow
+    (
+        formGroup
+        (
+            set::width('1/2'),
+            set::name('name'),
+            set::label($lang->build->nameAB)
+        ),
+        $lastBuild ? formGroup
+        (
+            set::width('1/2'),
+            setClass('items-center'),
+            div
+            (
+                setID('lastBuildBox'),
+                setClass('text-gray'),
+                div
+                (
+                    setClass('help-block'),
+                    html('&nbsp;' . $lang->build->last . ': <a class="code label light" id="lastBuildBtn">' . $lastBuild->name . '</a>')
+                )
+            )
+        ) : ''
+    ),
+    formRow
+    (
+        formGroup
+        (
+            set::width('1/2'),
+            set::name('builder'),
+            set::label($lang->build->builder),
+            set::value($app->user->account),
+            set::items($users)
+        )
+    ),
+    formRow
+    (
+        set::id('buildDateRow'),
+        formGroup
+        (
+            set::width('1/2'),
+            set::name('date'),
+            set::id('buildDate'),
+            set::label($lang->build->date),
+            set::control('date'),
+            set::value(helper::today())
+        )
+    ),
+    formRow
+    (
+        formGroup
+        (
+            set::name('scmPath'),
+            set::label($lang->build->scmPath),
+            set::placeholder($lang->build->placeholder->scmPath)
+        )
+    ),
+    formRow
+    (
+        formGroup
+        (
+            set::name('filePath'),
+            set::label($lang->build->filePath),
+            set::placeholder($lang->build->placeholder->filePath)
+        )
+    ),
+    formRow
+    (
+        set::id('buildFiles'),
+        formGroup
+        (
+            set::label($lang->build->files),
+            upload(set::name('buildFiles[]'))
+        )
+    ),
+    formRow
+    (
+        formGroup
+        (
+            set::label($lang->build->desc),
+            editor
+            (
+                set::name('desc'),
+                set::rows('10')
+            )
+        ),
+        formGroup
+        (
+            setClass('hidden'),
+            set::name('project'),
+            set::value($projectID)
+        )
+    )
+);
+
+/* ====== Render page ====== */
+render();

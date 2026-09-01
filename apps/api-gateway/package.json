@@ -1,0 +1,27 @@
+{
+  "name": "@pulsex/api-gateway",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "SERVICE_NAME=api-gateway tsx watch src/index.ts",
+    "start": "tsx src/index.ts"
+  },
+  "dependencies": {
+    "@pulsex/ai-service": "workspace:*",
+    "@pulsex/config": "workspace:*",
+    "@pulsex/events": "workspace:*",
+    "@pulsex/knowledge-service": "workspace:*",
+    "@pulsex/notification-service": "workspace:*",
+    "@pulsex/project-service": "workspace:*",
+    "@pulsex/qa-service": "workspace:*",
+    "@pulsex/server": "workspace:*",
+    "@pulsex/shared": "workspace:*",
+    "@pulsex/task-service": "workspace:*",
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "@types/ws": "^8.5.13",
+    "tsx": "^4.19.2"
+  }
+}

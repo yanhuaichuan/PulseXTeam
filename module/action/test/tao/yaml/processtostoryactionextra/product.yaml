@@ -1,0 +1,45 @@
+---
+title: Product测试数据定义
+desc: processToStoryActionExtra方法测试数据
+
+fields:
+- field: id
+  note: 产品ID
+  range: 1-10
+  prefix: ""
+  postfix: ""
+- field: name
+  note: 产品名称
+  range: '普通产品1,普通产品2,影子产品,普通产品3,测试产品'
+  prefix: ""
+  postfix: ""
+- field: code
+  note: 产品代码
+  range: 'product1,product2,shadow,product3,test'
+  prefix: ""
+  postfix: ""
+- field: shadow
+  note: 是否影子产品(0-否,1-是)
+  range: '0,0,1,0,0'
+  prefix: ""
+  postfix: ""
+- field: type
+  note: 产品类型
+  range: 'normal'
+  prefix: ""
+  postfix: ""
+- field: status
+  note: 产品状态
+  range: 'normal'
+  prefix: ""
+  postfix: ""
+- field: acl
+  note: 访问控制
+  range: 'open'
+  prefix: ""
+  postfix: ""
+- field: deleted
+  note: 是否删除
+  range: '0'
+  prefix: ""
+  postfix: ""

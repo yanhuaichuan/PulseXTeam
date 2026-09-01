@@ -1,0 +1,20 @@
+{
+    "require-dev": {
+        "rector/rector": "0.16.*"
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "Misc\\Rector\\": "rector/"
+        }
+    },
+    "scripts": {
+        "rector": [
+            "Composer\\Config::disableProcessTimeout",
+            "rector process --no-diffs --no-progress-bar"
+        ],
+        "rector-nocache": [
+            "Composer\\Config::disableProcessTimeout",
+            "rector process --no-diffs --no-progress-bar --clear-cache"
+        ]
+    }
+}

@@ -1,0 +1,208 @@
+library 'z-common@feat-231130'
+
+pipeline {
+  agent {
+    kubernetes {
+      inheritFrom 'build-docker code-scan xuanim'
+    }
+  }
+
+  options {
+    parallelsAlwaysFailFast()
+    overrideIndexTriggers(false)
+    skipDefaultCheckout()
+  }
+
+  parameters {
+    separator(name: "action", sectionHeader: "构建动作")
+    booleanParam defaultValue: false, description: '执行代码扫描', name: 'code_scan_enabled'
+    booleanParam defaultValue: false, description: '全量单元测试', name: 'full_unit_test'
+
+    separator(name: "info", sectionHeader: "webhook自动注入")
+    string description: 'git commit', name: 'commitId', trim: true
+    string description: 'git commit 作者', name: 'commitAuthor', trim: true
+  }
+
+  triggers {
+    GenericTrigger(
+     genericVariables: [
+      [key: 'commitId', value: '$.head_commit.id'],
+      [key: 'commitAuthor', value: '$.head_commit.author.username'],
+      [key: 'commitMsg', value: '$.head_commit.message']
+     ],
+     causeString: 'Triggered by $commitAuthor with msg: $commitMsg',
+     token: 'tmMCfWb24hEQksD578',
+     printContributedVariables: true,
+     printPostContent: true,
+     silentResponse: false,
+     shouldNotFlatten: false,
+    )
+  }
+
+  environment {
+    MIDDLE_IMAGE_REPO = 'hub.qc.oop.cc/zentao-ztf'
+
+    XIM_NOTIFY_USERS = "liyang"
+    XIM_GROUPS = "31a0008b-6e3e-4b7f-9b7b-396a46b1f8f4"
+  }
+
+  stages {
+    stage('prepare') {
+      steps {
+        checkout changelog: false, poll: false, scm: scmGit(branches: [[name: "$params.commitId"]], extensions: [], userRemoteConfigs: [[credentialsId: 'git-zcorp-cc-jenkins-bot-http', url: 'https://git.zcorp.cc/easycorp/zentaopms.git']])
+        echo 'checkout code success'
+        script {
+            env.GIT_URL = sh(returnStdout: true, script: 'git config --get remote.origin.url').trim()
+            env.GIT_COMMIT = params.commitId
+
+            def j = job.newJob()
+            env.GIT_BRANCH = j.getBranchById(env.GIT_COMMIT)
+
+            env.CHANGED_MODULES= sh(returnStdout: true, script: '''git diff-tree --no-commit-id --name-only -r HEAD | grep 'module/' | awk -F '/' '{print "/apps/zentao/"$1"/"$2}' | sort -u | xargs''').trim()
+            env.CHANGED_MODULE_AUTHORS = params.commitAuthor
+
+            env.ZENTAO_VERSION = sh(returnStdout: true,script: 'cat VERSION').trim()
+            env.MIDDLE_IMAGE_TAG = sh(returnStdout: true,script: 'echo $BUILD_ID-${GIT_COMMIT}').trim()
+        }
+        sh 'env'
+      }
+    }
+
+    stage('build quality') {
+      parallel {
+        stage('SonarQube') {
+          when { expression { return params.code_scan_enabled } }
+          steps {
+            container('sonar') {
+              withSonarQubeEnv('sonarqube') {
+                catchError(buildResult: 'SUCCESS', stageResult: 'FAILURE') {
+                  sh 'git config --global --add safe.directory $(pwd)'
+                  sh 'sonar-scanner -Dsonar.analysis.user=$(git show -s --format=%ae)'
+                }
+              }
+            }
+          }
+          post {
+            success {
+              ximNotify(title: "禅道代码扫描正常", content: "", url="https://sonar.qc.oop.cc/dashboard?id=zentaopms&branch=${env.GIT_BRANCH}")
+            }
+            failure {
+              ximNotify(title: "禅道代码扫描异常", content: "", url="https://sonar.qc.oop.cc/dashboard?id=zentaopms&branch=${env.GIT_BRANCH}")
+            }
+          }
+        }
+
+        stage('Unit Test') {
+          when {
+            expression {
+              return env.CHANGED_MODULES != '' || params.full_unit_test
+            }
+          }
+          stages {
+            stage('Build Image') {
+              steps {
+                container('docker') {
+                  sh 'docker build --pull . -f misc/ci/Dockerfile.test --build-arg VERSION=${ZENTAO_VERSION} --build-arg MIRROR=true -t ${MIDDLE_IMAGE_REPO}:${MIDDLE_IMAGE_TAG}'
+                  sh 'docker push ${MIDDLE_IMAGE_REPO}:${MIDDLE_IMAGE_TAG}'
+                }
+              }
+              post {
+                success {
+                  echo 'build image success'
+                }
+                failure {
+                  ximNotify(title: "测试镜像构建失败", content: "")
+                }
+              }
+            }
+
+            stage('Run') {
+              agent {
+                kubernetes {
+                  inheritFrom 'xuanim'
+                  containerTemplate {
+                    name 'zentao'
+                    image "${MIDDLE_IMAGE_REPO}:${MIDDLE_IMAGE_TAG}"
+                    command "/usr/bin/entrypoint.sh"
+                  }
+                  yaml '''
+                    apiVersion: v1
+                    kind: Pod
+                    spec:
+                      containers:
+                      - name: zentao
+                        env:
+                        - name: MYSQL_INTERNAL
+                          value: "true"
+                  '''
+                }
+              }
+              options { skipDefaultCheckout() }
+
+              environment {
+                DATA_REPORT_TOKEN = credentials('data_report_token')
+              }
+
+              steps {
+                script {
+                  def mode = "全量测试"
+                  def targetDir = "/apps/zentao/module"
+                  if (!params.full_unit_test) {
+                    mode = "增量测试"
+                    targetDir = env.CHANGED_MODULES
+                    if (env.CHANGED_MODULE_AUTHORS) {
+                      def ximUsers = env.CHANGED_MODULE_AUTHORS
+                      if (env.XIM_NOTIFY_USERS) {
+                         ximUsers = ximUsers + "," + env.XIM_NOTIFY_USERS
+                      }
+                      env.XIM_USERS = ximUsers
+                      //env.XIM_USERS = env.XIM_NOTIFY_USERS
+                    }
+
+                  }
+
+                  def j = job.newJob()
+                  j.SaveHeadReport(job.headerFileName())
+
+                  stage(mode) {
+                    container('zentao') {
+                      sh 'rm -f /bin/sh && ln -s /bin/bash /bin/sh'
+                      sh 'rm -rf /apps/zentao/module/*/test/ui'
+                      sh '''
+                        set +x && . /etc/s6/s6-init/envs && set -x
+                        s6-svwait -u -t 30000 /etc/s6/s6-available/mysql && initdb.php > /apps/zentao/unittestdb
+                        /apps/zentao/test/runtime/ztf ''' + targetDir + ''' | tee /apps/zentao/test/${MIDDLE_IMAGE_TAG}.log
+                        chmod -R 777 /root
+                        parsehtml.php
+                        pipeline-unittest.sh /apps/zentao/test/${MIDDLE_IMAGE_TAG}.log'''
+                    }
+                  }
+                }
+
+              }
+
+              post {
+                failure {
+                  container('zentao') {
+                    sh '''
+                      set +x && . /etc/s6/s6-init/envs && . /opt/easysoft/scripts/libmysql_ztf.sh
+                      mkdir dump && mysql_dump_db ${ZT_MYSQL_DB} dump/${ZT_MYSQL_DB}-${BUILD_ID}.sql
+                    '''
+                    archiveArtifacts artifacts: 'dump/*.sql.gz', followSymlinks: false
+                  }
+                  ximNotify(title: "单元测试失败", content: "[数据库导出]($JOB_URL$BUILD_ID/artifact/dump/) 点击下方链接查看执行明细")
+                }
+                always {
+                  publishHTML([allowMissing: false,alwaysLinkToLastBuild: false,keepAll: true,reportDir: 'coverage',reportFiles: 'index.html',reportName: 'UT Coverage Report',reportTitles: 'UT Coverage Report'])
+                }
+              }
+            }
+          }
+        }//End unittest
+      }
+    }
+  }// End Root Stages
+} // End pipeline
+
+
+

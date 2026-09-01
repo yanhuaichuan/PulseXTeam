@@ -1,0 +1,129 @@
+:root
+{
+    --zt-apps-bar-height: 36px;
+    --zt-apps-bar-bg: var(--color-canvas);
+    --zt-menu-width: 120px!important;
+    --zt-menu-fold-width: 64px;
+    --zt-menu-space: 8px;
+    --zt-menu-active-bg: var(--color-primary-500);
+    --zt-menu-hover-bg: rgba(var(--color-primary-500-rgb), .4);
+    --zt-menu-text-color: rgba(var(--color-canvas-rgb), 1);
+    --zt-menu-text-active: var(--color-canvas);
+    --zt-menu-bg: var(--color-primary-600);
+}
+[lang^='en'] {--zt-menu-width: 132px;}
+.has-space {--zt-menu-width: 160px!important;}
+
+#menu {position: fixed; left: 0; top: 0; bottom: 0; background: var(--zt-menu-bg); width: var(--zt-menu-width); color: var(--zt-menu-text-color); transition: width .1s; user-select: none; z-index: 1120;}
+#menu .nav {flex-direction: column; align-items: stretch;}
+#menu .nav > li {display: block; height: var(--zt-menu-height, 38px); padding: 4px 8px; transition: padding .2s;}
+#menu .nav > .divider, #menuMoreList > .divider {background: var(--color-canvas); opacity: .12; height: 1px; padding: 6px 4px; align-self: stretch; background-clip: content-box; box-sizing: content-box; border: none; margin: 0}
+#menu .nav > li > a {color: inherit; display: flex; align-items: center; gap: 4px; padding: 0 6px; height: calc(var(--zt-menu-height, 38px) - 8px); transition: color .2s, background-color .2s; border-radius: var(--radius-md);}
+#menu .nav > li > a.active,
+#menu .nav > li > a:hover {background: var(--zt-menu-hover-bg); color: var(--zt-menu-text-active)}
+#menu .nav > li > a.active {background: var(--zt-menu-active-bg); color: var(--zt-menu-text-active)}
+#menu .nav > li > a > .text {white-space: nowrap;}
+#menu .nav > li > a > .icon {font-size: 18px; display: inline-flex; align-items: center; justify-content: center;}
+@supports not (gap: 1px) {#menu .nav > li > a > .icon {margin-right: 4px;}}
+
+#spaceHeading {display: none; height: 40px; align-items: center; flex-wrap: nowrap; gap: 4px; margin: 8px; background-color: rgba(var(--color-canvas-rgb), .1); border-radius: var(--radius-md); position: relative; padding: 0 8px;}
+.has-space #spaceHeading {display: flex;}
+#spaceHeading > .text {min-width: 0; overflow: hidden; white-space: nowrap; flex: auto}
+#spaceHeading > .icon, #spaceHeading > .label {flex: none}
+#spaceHeading.has-dropmenu > .icon, #spaceHeading > .label {display: none;}
+#spaceDropmenu {position: absolute; left: 0; top: 0; right: 0; bottom: 0;}
+#spaceDropmenu .dropmenu-btn {height: 40px; width: 100%;}
+#spaceDropmenu .dropmenu-btn > .text {min-width: 0; overflow: hidden; white-space: nowrap; flex: auto;}
+#spaceDropmenu .dropmenu-btn > .label {flex: none}
+.dropmenu.popup {background: var(--color-surface-light);}
+.hide-menu #spaceHeading > .text, .hide-menu #spaceHeading > .label {display: none;}
+.hide-menu #spaceHeading > .icon {display: flex;}
+.hide-menu #spaceHeading {justify-content: center;}
+
+#menuNav, #spaceHeading {margin: var(--zt-menu-space); background-color: rgba(var(--color-canvas-rgb), .07); border-radius: var(--radius-md);}
+#menuNav {padding: 4px 0;}
+#menuMainNav a {cursor: pointer;}
+.show-menu #menuToggleNav [data-hint]::after {content: attr(data-collapse-text)}
+.show-menu #menuNav [data-hint]::before, .show-menu #menuNav [data-hint]::after {display: none;}
+.show-menu #menuToggleNav [data-hint]::before, .show-menu #menuToggleNav [data-hint]::after {display: block;}
+
+#menuMainNav .is-space,
+.has-space #menuMainNav .is-original {display: none;}
+.has-space #menuMainNav .is-space {display: block;}
+
+#menuMoreNav {display: none;}
+.show-more-nav #menuMoreNav {display: block;}
+#menuMoreNav > li > a.with-popover-show {background-color: rgba(255,255,255,.1);}
+#menuMoreList {background: var(--zt-menu-bg); padding: 8px 0; min-width: 100px; list-style: none;}
+#menuMoreList > .menu-item {padding: 1px 12px!important; height: 32px!important;}
+#menuMoreList > .menu-item > a > .text {flex: auto;}
+
+body.hide-menu {--zt-menu-width: var(--zt-menu-fold-width)!important;}
+.hide-menu #menu .nav > li {padding: 4px}
+.hide-menu #menu .nav > .divider {padding: 6px;}
+.hide-menu #menu .nav > li > a {justify-content: center;}
+.hide-menu #menu .nav > li > a > .text {display: none;}
+.hide-menu #menu #menuMoreNav .nav > li > a > .text {display: flex;}
+.hide-menu #menu .menu-toggle > .icon {transform: rotate(180deg);}
+
+#apps {position: fixed; left: var(--zt-menu-width); top: 0; bottom: var(--zt-apps-bar-height); right: 0; background-color: var(--zt-page-bg); transition: left .1s;}
+.hide-menu #apps {left: var(--zt-menu-fold-width)!important;}
+
+#appsBar {display: flex; flex-wrap: nowrap; align-items: center; position: fixed; left: var(--zt-menu-width); bottom: 0; right: 0; height: var(--zt-apps-bar-height); padding: 0 4px; background: var(--zt-apps-bar-bg); box-shadow: 0 -2px 12px rgba(0,0,0,.02); transition: left .1s; border-top-width: 1px;}
+.hide-menu #appsBar {left: var(--zt-menu-fold-width)!important;}
+#appTabs {flex: auto; user-select: none; --nav-active-color: currentColor}
+#appTabs > li > a {border-radius: var(--radius-md); opacity: .6;}
+#appTabs > li + li::before {display: block; content: ' '; position: absolute; left: 0; top: 8px; bottom: 8px; width: 1px; background: var(--color-inverse); opacity: .12;}
+#appTabs > li > a.active {opacity: 1;}
+.has-space #appTabs > li {display: none;}
+.has-space #appTabs > li.active {display: flex;}
+#appsToolbar {width: 360px; display: flex; justify-content: flex-end;}
+#appsToolbar > .btn {color: inherit}
+#appsToolbar > .btn-zentao > .icon {color: var(--color-primary-400)}
+
+#visionSwitcher {flex: none; position: relative; margin-right: 12px; margin-left: 4px;}
+#visionSwitcher::before, #visionSwitcher::after {content: ''; display: block; position: absolute; right: -9px; top: -2px; width: 0; height: 0; border-style: solid; border-width: 18px 0 18px 8px; border-color: transparent transparent transparent var(--color-canvas);}
+#visionSwitcher::before {right: -10px; border-left-color: var(--color-fore); opacity: .1;}
+#versionSwitchBtn {padding: 0 6px;}
+.has-space #visionSwitcher {display: none;}
+
+.app-container {position: absolute; left: 0; top: 0; right: 0; bottom: 0; overflow: hidden; transition-duration: .3s; background: var(--zt-page-bg);}
+.app-container.loading {background: var(--zt-page-bg) linear-gradient(180deg, var(--zt-header-bg) 0, var(--zt-header-bg) 48px, rgba(255,0,0,0) 48px) no-repeat;}
+.app-container.loading:before {background-color: rgba(0,0,0,.1);}
+.app-container.loading:before, .ap p-container.loading::after {transition-delay: 3s;}
+.app-container.loading.open-from-hidden {transition-delay: 0s;}
+.app-container.loading.open-from-hidden > iframe {opacity: 0;}
+.app-container > iframe {width: 100%; height: 100%; background: inherit; transition-duration: .1s;}
+
+.messagers > .messager-holder {max-width: 35%;}
+.messager-notice, .score-notice {align-items: flex-start;}
+.messager-notice > .icon-envelope-o, .score-notice > .icon-diamond {margin-top: 2px;}
+.messager-notice > .alert-close {position: fixed; top: 10px; right: 15px; width: 20px; height: 20px;}
+.messager-notice .browser-message-content {color: rgba(30,168,254); max-height: calc(100vh - 14rem); overflow-y: auto;}
+.messager-notice .browser-message-content > span {width: 94%; display: inline-block;}
+.messager-notice .browser-message-content > a {color: rgba(49,60,82)}
+
+.hl-tutorial {position: relative!important; z-index: 1010!important; -webkit-box-shadow: 0 0 0 0 #000!important; box-shadow: 0 0 0 0 #000!important; -webkit-transition: -webkit-box-shadow 1s!important; -o-transition: box-shadow 1s!important; transition: -webkit-box-shadow 1s!important; transition: box-shadow 1s!important; transition: box-shadow 1s,-webkit-box-shadow 1s!important }
+.hl-tutorial.hl-in { -webkit-box-shadow: 0 0 20px 0 #ffff8d,0 0 0 2px #ffd180,0 0 0 3000px rgba(0,0,0,.2)!important; box-shadow: 0 0 20px 0 #ffff8d,0 0 0 2px #ffd180,0 0 0 3000px rgba(0,0,0,.2)!important }
+.btn.tooltip-tutorial,.hl-tutorial.hl-in:hover { position: relative!important; z-index: 1010!important; -webkit-box-shadow: 0 0 30px 0 #ffff8d,0 0 0 5px #ffd180,0 0 0 3000px rgba(0,0,0,.3)!important; box-shadow: 0 0 30px 0 #ffff8d,0 0 0 5px #ffd180,0 0 0 3000px rgba(0,0,0,.3)!important
+}
+
+#upgradeContent {display: none; position: absolute; bottom: var(--zt-apps-bar-height); right: 10px; width: 370px; height: 322px; background-color: #fff; padding: 5px 0; border: 1px solid rgba(0,0,0,.15); border-color: rgba(0,0,0,.1); opacity: 1; border-radius: 4px; box-shadow: 0 6px 12px rgba(0,0,0,.12), 0 1px 3px rgba(0,0,0,.1);}
+.version-upgrade {width: 14px; height: 16px; float: left; background-repeat: no-repeat; background-position: center ; background-size: cover; display: block;}
+#latestVersionList {height: 270px; overflow: auto;}
+
+#menuMainNav[z-use-sortable] a[data-app]:hover {cursor: move;}
+#menuMainNav[z-use-sortable] li.divider:hover {cursor: move;}
+.tutorial-hl {position: relative; z-index: 1000; box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.4);}
+.tutorial-hl {position: relative; z-index: 1000;}
+.tutorial-hl {position: relative; z-index: 1000!important;}
+.tutorial-popover .arrow::before {border: 3px solid var(--color-primary-500); width: 10px; height: 10px; border-radius: 50%}
+.tutorial-popover .arrow-top::before {top: calc(-34px - var(--arrow-size))}
+.tutorial-popover .arrow-left::before {left: calc(-34px - var(--arrow-size))}
+.tutorial-popover .arrow-right::before {right: calc(-34px - var(--arrow-size))}
+.tutorial-popover .arrow-bottom::before {bottom: calc(-34px - var(--arrow-size))}
+.tutorial-popover .arrow::after {content: ' '; position: absolute; background: var(--color-primary-500); display: block; width: 32px; height: 32px; visibility: visible;}
+.tutorial-popover .arrow-top::after {width: 2px; top: calc(var(--arrow-size) - 34px); left: 4px}
+.tutorial-popover .arrow-left::after {height: 2px; left: calc(var(--arrow-size) - 34px); top: 4px}
+.tutorial-popover .arrow-right::after {height: 2px; right: calc(var(--arrow-size) - 34px); top: 4px}
+.tutorial-popover .arrow-bottom::after {width: 2px; bottom: calc(var(--arrow-size) - 34px); left: 4px}

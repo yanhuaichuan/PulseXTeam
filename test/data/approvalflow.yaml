@@ -1,0 +1,20 @@
+title: table zt_approvalflow
+desc: ""
+author: sun guangming
+version: "1.0"
+fields:
+  - field: id
+    range: 1-100000
+  - field: name
+    range: '最简审批'
+  - field: code
+    range: 'simple'
+  - field: version
+    range: 1
+  - field: createdBy
+    range: 'admin'
+  - field: createdDate
+    note: "创建日期"
+    range: "(M)-(w)"
+    type: timestamp
+    format: "YY/MM/DD"

@@ -1,0 +1,54 @@
+---
+title: 项目数据定义
+desc: 用于测试designZen::setMenu()方法的项目数据
+author: Claude
+version: 1.0
+
+fields:
+  - field: id
+    note: 项目ID
+    range: 1-10
+
+  - field: project
+    note: 所属项目集
+    range: 0
+
+  - field: isTpl
+    note: 是否模板
+    range: 0
+
+  - field: name
+    note: 项目名称
+    range: 项目1,项目2,项目3,项目4,项目5,项目6,项目7,项目8,项目9,项目10
+
+  - field: model
+    note: 项目模型
+    range: waterfall,waterfall,ipd,waterfallplus,scrum,kanban,agile,sprint,stage,build
+
+  - field: type
+    note: 项目类型
+    range: project
+
+  - field: begin
+    note: 开始日期
+    range: 2024-01-01
+
+  - field: end
+    note: 结束日期
+    range: 2024-12-31
+
+  - field: status
+    note: 项目状态
+    range: wait
+
+  - field: acl
+    note: 访问控制
+    range: open
+
+  - field: order
+    note: 排序
+    range: 1-10
+
+  - field: deleted
+    note: 是否删除
+    range: 0

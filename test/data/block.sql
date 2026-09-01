@@ -1,0 +1,1 @@
+truncate `zt_block`;

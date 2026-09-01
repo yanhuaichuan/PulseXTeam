@@ -1,0 +1,30 @@
+{
+  "name": "pulsex",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Open-source engineering workspace for planning, building, testing and shipping software.",
+  "author": "yanhuaichuan",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/yanhuaichuan/PulseXTeam.git"
+  },
+  "scripts": {
+    "dev": "turbo run dev --parallel",
+    "dev:web": "pnpm --filter @pulsex/web dev",
+    "dev:api": "pnpm --filter @pulsex/api-gateway dev",
+    "dev:realtime": "pnpm --filter @pulsex/realtime-service dev",
+    "build": "turbo run build",
+    "lint": "turbo run lint",
+    "test": "turbo run test",
+    "typecheck": "turbo run typecheck"
+  },
+  "devDependencies": {
+    "turbo": "^2.3.3",
+    "typescript": "^5.7.2"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "packageManager": "pnpm@9.5.0"
+}

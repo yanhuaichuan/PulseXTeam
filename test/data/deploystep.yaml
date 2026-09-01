@@ -1,0 +1,104 @@
+title: table zt_deploystep
+desc: ""
+author: automated export
+version: "1.0"
+fields:
+  - field: id
+    note: ""
+    prefix: ""
+    postfix: ""
+    loop: 0
+    loopfix: ""
+    format: ""
+  - field: deploy
+    note: ""
+    prefix: ""
+    postfix: ""
+    loop: 0
+    loopfix: ""
+    format: ""
+  - field: title
+    note: ""
+    prefix: ""
+    postfix: ""
+    loop: 0
+    loopfix: ""
+    format: ""
+  - field: begin
+    note: ""
+    prefix: ""
+    postfix: ""
+    loop: 0
+    loopfix: ""
+    format: ""
+  - field: end
+    note: ""
+    prefix: ""
+    postfix: ""
+    loop: 0
+    loopfix: ""
+    format: ""
+  - field: stage
+    note: ""
+    prefix: ""
+    postfix: ""
+    loop: 0
+    loopfix: ""
+    format: ""
+  - field: content
+    note: ""
+    prefix: ""
+    postfix: ""
+    loop: 0
+    loopfix: ""
+    format: ""
+  - field: status
+    note: ""
+    prefix: ""
+    postfix: ""
+    loop: 0
+    loopfix: ""
+    format: ""
+  - field: assignedTo
+    note: ""
+    prefix: ""
+    postfix: ""
+    loop: 0
+    loopfix: ""
+    format: ""
+  - field: assignedDate
+    range: "20250101 000000:1D"
+    type: timestamp
+    format: "YYYY-MM-DD"
+    postfix: "\t"
+  - field: finishedBy
+    note: ""
+    prefix: ""
+    postfix: ""
+    loop: 0
+    loopfix: ""
+    format: ""
+  - field: finishedDate
+    range: "20250101 000000:1D"
+    type: timestamp
+    format: "YYYY-MM-DD"
+    postfix: "\t"
+  - field: createdBy
+    note: ""
+    prefix: ""
+    postfix: ""
+    loop: 0
+    loopfix: ""
+    format: ""
+  - field: createdDate
+    range: "20250101 000000:1D"
+    type: timestamp
+    format: "YYYY-MM-DD"
+    postfix: "\t"
+  - field: deleted
+    note: ""
+    prefix: ""
+    postfix: ""
+    loop: 0
+    loopfix: ""
+    format: ""

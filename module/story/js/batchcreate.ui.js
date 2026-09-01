@@ -1,0 +1,70 @@
+window.setModuleAndPlanByBranch = function(e)
+{
+    const $branch  = $(e.target);
+    const branchID = $branch.val();
+    let $row       = $branch.closest('tr');
+
+    var moduleLink = $.createLink('tree', 'ajaxGetOptionMenu', 'productID=' + productID + '&viewtype=story&branch=' + branchID + '&rootModuleID=0&returnType=html&fieldID=&extra=nodeleted');
+
+    const $modulePicker = $row.find('[name^=module]').zui('picker');
+    const moduleID      = $row.find('[name^=module]').val();
+    $.getJSON(moduleLink, function(data)
+    {
+        $modulePicker.render({items: data.items})
+        $modulePicker.$.setValue(moduleID);
+    });
+
+    let planLink = $.createLink('product', 'ajaxGetPlans', 'productID=' + productID + '&branch=' + branchID + '&params=unexpired,noclosed&skipParent=true');
+
+    const $planPicker = $rows.find('[name^=plan]').zui('picker');
+    const planID      = $rows.find('[name^=plan]').val();
+    $.getJSON(planLink, function(data)
+    {
+        $planPicker.render({items: data})
+        $planPicker.$.setValue(planID);
+    });
+}
+
+window.setGrade = function(e)
+{
+    const parent = e.target.value;
+    const link   = $.createLink('story', 'ajaxGetGrade', 'parent=' + parent + '&type=' + storyType);
+    $.get(link, function(data)
+    {
+        data = JSON.parse(data);
+        const currentIndex = $(e.target).closest('tr').attr('data-index');
+        $(e.target).closest('tbody').find('[name^=grade]').each(function(index)
+        {
+            if(index < currentIndex) return;
+            let $grade = $(this).zui('picker');
+            $grade.render({items: data.items});
+            $grade.$.setValue(data.default);
+        })
+    })
+}
+
+window.switchType = function(e)
+{
+    const type = e.target.value;
+    const link = $.createLink(type, 'batchCreate', `productID=${productID}&branchID=${branch}&module=0&storyID=${storyID}&executionID=${executionID}`);
+
+    loadPage(link);
+}
+
+window.changeRegion = function(e)
+{
+    const $region  = $(e.target);
+    const regionID = $region.val();
+    const laneLink = $.createLink('kanban', 'ajaxGetLanes', 'regionID=' + regionID + '&type=story&field=lane');
+    $.getJSON(laneLink, function(data)
+    {
+        const laneID = data.items.length > 0 ? data.items[0].value : '';
+        $region.closest('tr').find('[name^=lane]').zui('picker').render({items: data.items});
+        $region.closest('tr').find('[name^=lane]').zui('picker').$.setValue(laneID);
+    });
+}
+
+window.handleRenderFieldCol = function($col, col)
+{
+    if(col.name === 'sourceNote') return renderSourceNote($col);
+};

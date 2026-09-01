@@ -1,0 +1,19 @@
+{
+  "name": "@pulsex/task-service",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.ts",
+  "scripts": {
+    "dev": "SERVICE_NAME=task-service tsx watch src/server.ts",
+    "start": "tsx src/server.ts"
+  },
+  "dependencies": {
+    "@pulsex/events": "workspace:*",
+    "@pulsex/server": "workspace:*",
+    "@pulsex/shared": "workspace:*"
+  },
+  "devDependencies": {
+    "tsx": "^4.19.2"
+  }
+}

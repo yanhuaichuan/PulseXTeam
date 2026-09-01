@@ -1,0 +1,26 @@
+title: zt_host
+author: Zeng gang
+version: "1.0"
+fields:
+  - field: id
+    range: 1-1000
+  - field: hostType
+    range: virtual
+  - field: type
+    range: node,physics
+  - field: osName
+    range: linux
+  - field: status
+    range: online{3},running,ready,wait,wait,online{2},running,ready,wait
+  - field: parent
+    range: 0{2},1-2{5}
+  - field: heartbeat
+    range: "(-2M)-(+1D):-1S"
+    type: timestamp
+    format: "YYYY-MM-DD hh:mm:ss"
+  - field: extranet
+    fields:
+      - field: field1
+        range: '10.0.0.'
+      - field: field2
+        range: "1-10"

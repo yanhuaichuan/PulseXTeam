@@ -1,0 +1,43 @@
+#!/usr/bin/env php
+<?php
+
+/**
+
+title=测试 metricModel::getNoDataTip();
+timeout=0
+cid=17112
+
+- 步骤1：度量库没有任何数据 @未到收集数据的时间，暂无数据。
+- 步骤2：度量库有数据但指定度量项无数据 @度量范围内未产生数据，暂无数据。
+- 步骤3：空字符串度量代码 @度量范围内未产生数据，暂无数据。
+- 步骤4：不存在的度量代码 @度量范围内未产生数据，暂无数据。
+- 步骤5：null度量代码 @度量范围内未产生数据，暂无数据。
+
+*/
+
+// 1. 导入依赖（路径固定，不可修改）
+include dirname(__FILE__, 5) . '/test/lib/init.php';
+include dirname(__FILE__, 2) . '/lib/model.class.php';
+
+// 2. zendata数据准备（根据需要配置）
+$table = zenData('metriclib');
+$table->metricCode->range('test_metric_1{3}, test_metric_2{2}, all{5}');
+$table->value->range('10-50:10');
+$table->year->range('2024{10}');
+$table->month->range('1{10}');
+$table->day->range('1-10');
+$table->gen(0); // 先不生成数据，用于测试空数据库场景
+
+// 3. 用户登录（选择合适角色）
+su('admin');
+
+// 4. 创建测试实例（变量名与模块名一致）
+$metricTest = new metricModelTest();
+
+// 5. 🔴 强制要求：必须包含至少5个测试步骤
+r($metricTest->getNoDataTipTest('test_metric_1')) && p() && e('未到收集数据的时间，暂无数据。'); // 步骤1：度量库没有任何数据
+$table->gen(10); // 生成测试数据，包含all和test_metric_1, test_metric_2
+r($metricTest->getNoDataTipTest('nonexistent_metric')) && p() && e('度量范围内未产生数据，暂无数据。'); // 步骤2：度量库有数据但指定度量项无数据
+r($metricTest->getNoDataTipTest('')) && p() && e('度量范围内未产生数据，暂无数据。'); // 步骤3：空字符串度量代码
+r($metricTest->getNoDataTipTest('invalid_metric_code')) && p() && e('度量范围内未产生数据，暂无数据。'); // 步骤4：不存在的度量代码
+r($metricTest->getNoDataTipTest(null)) && p() && e('度量范围内未产生数据，暂无数据。'); // 步骤5：null度量代码

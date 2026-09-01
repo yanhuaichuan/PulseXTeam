@@ -1,0 +1,12 @@
+#copyExecutionModal .modal-dialog {max-height: unset;}
+#copyExecutionModal .copy-title {min-width: 130px;}
+#copyExecutionModal .execution-block {flex: 0 1 calc(50% - 0.5rem); padding: 20px 10px; overflow: hidden;}
+#copyExecutions div.bg-gray-100 {width: 100%;}
+#copyExecutions .btn:hover {--tw-ring-color: var(--color-primary-500);}
+#copyExecutions .btn:before {background: none;}
+#copyExecutions .btn.primary-outline {background-color: var(--color-primary-50);}
+#copyExecutions .btn.primary-outline:after {position: absolute; content: '\e92f'; font-family: ZentaoIcon; font-size: 20px; right: 10px;}
+#copyExecutions .btn.primary-outline span{color: rgba(var(--color-fore-rgb),var(--tw-text-opacity));}
+#copyExecutions .execution-block span {width: calc(100% - 45px); overflow: hidden;}
+
+#form-execution-create [data-name='dateRange'] > .input-group {display: block;}

@@ -1,0 +1,38 @@
+#!/usr/bin/env php
+<?php
+
+/**
+
+title=测试 aiModel::useLanguageModel();
+timeout=0
+cid=15080
+
+- 步骤1：测试有效启用模型 @1
+- 步骤2：测试禁用模型回退到默认模型 @1
+- 步骤3：测试不存在模型使用默认模型 @1
+- 步骤4：测试空值使用默认模型 @1
+- 步骤5：测试无可用模型情况 @0
+
+*/
+
+// 1. 导入依赖（路径固定，不可修改）
+include dirname(__FILE__, 5) . '/test/lib/init.php';
+include dirname(__FILE__, 2) . '/lib/model.class.php';
+
+// 2. 由于useLanguageModel测试已完全模拟化，不需要生成测试数据
+// 设置基本的用户登录以满足框架要求
+su('admin');
+
+// 4. 创建测试实例（变量名与模块名一致）
+$aiTest = new aiModelTest();
+
+// 3. 🔴 强制要求：必须包含至少5个测试步骤
+r($aiTest->useLanguageModelTest(1)) && p() && e('1'); // 步骤1：测试有效启用模型
+r($aiTest->useLanguageModelTest(4)) && p() && e('1'); // 步骤2：测试禁用模型回退到默认模型
+r($aiTest->useLanguageModelTest(999)) && p() && e('1'); // 步骤3：测试不存在模型使用默认模型
+r($aiTest->useLanguageModelTest('')) && p() && e('1'); // 步骤4：测试空值使用默认模型
+
+// 设置全局标记来模拟无可用模型的情况
+global $tester;
+$tester->noModelsAvailable = true;
+r($aiTest->useLanguageModelTest(null)) && p() && e('0'); // 步骤5：测试无可用模型情况

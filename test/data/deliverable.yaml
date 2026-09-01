@@ -1,0 +1,34 @@
+title: table zt_deliverable
+desc: "交付物"
+author: Sun Guangming
+version: "1.0"
+fields:
+  - field: id
+    note: "ID"
+    range: 1-1000
+  - field: name
+    fields:
+    - field: name1
+      range: '交付物'
+    - field: name2
+      range: 1-1000
+  - field: module
+    range: 1-100
+  - field: workflowGroup
+    range: 1-100
+  - field: status
+    range: enabled,disabled
+  - field: activity
+    range: 1-100
+  - field: trimmable
+    range: 0,1
+  - field: trimRule
+    fields:
+    - field: name1
+      range: '裁剪准则'
+    - field: name2
+      range: 1-100
+  - field: desc
+    range: '交付物描述'
+  - field: template
+    prefix: "[]"

@@ -1,0 +1,40 @@
+<?php
+/**
+ * The install router file of ZenTaoPMS.
+ *
+ * @copyright   Copyright 2009-2013 QingDao Nature Easy Soft Network Technology Co,LTD (www.cnezsoft.com)
+ * @license     ZPL(http://zpl.pub/page/zplv12.html) or AGPL(https://www.gnu.org/licenses/agpl-3.0.en.html)
+ * @author      Chunsheng Wang <chunsheng@cnezsoft.com>
+ * @package     ZenTaoPMS
+ * @version     $Id: install.php 4677 2013-04-26 06:23:58Z chencongzhi520@gmail.com $
+ * @link        http://www.zentao.net
+ */
+error_reporting(0);
+
+/* Load the framework. */
+include '../framework/router.class.php';
+include '../framework/control.class.php';
+include '../framework/model.class.php';
+include '../framework/helper.class.php';
+
+/* Instance the app. */
+$app = router::createApp('pms', dirname(dirname(__FILE__)), 'router', 'installing');
+
+/* Check installed or not. */
+if(!isset($_SESSION['installing']) && $app->checkInstalled()) die(header('location: index.php'));
+
+/* Reset the config params to make sure the install program will be lauched. */
+$oldRequestType = zget($config, 'requestType', '');
+$config->set('requestType', 'GET');
+$config->set('default.module', 'install');
+$app->setDebug();
+
+try
+{
+    $app->parseRequest();
+    $app->loadModule();
+}
+catch (EndResponseException $endResponseException)
+{
+    echo $endResponseException->getContent();
+}

@@ -1,0 +1,30 @@
+---
+title: ProjectStory测试数据定义
+desc: processToStoryActionExtra方法测试数据
+
+fields:
+- field: project
+  note: 项目ID
+  range: '1,1,1,2,2'
+  prefix: ""
+  postfix: ""
+- field: product
+  note: 产品ID
+  range: '2,2,2,2,2'
+  prefix: ""
+  postfix: ""
+- field: story
+  note: 需求ID
+  range: '6,7,9,8,10'
+  prefix: ""
+  postfix: ""
+- field: version
+  note: 版本号
+  range: '1'
+  prefix: ""
+  postfix: ""
+- field: order
+  note: 排序
+  range: '0'
+  prefix: ""
+  postfix: ""

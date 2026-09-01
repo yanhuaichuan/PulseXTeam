@@ -1,0 +1,18 @@
+title: Create a todo for todoTao::closeTodo unit test case.
+desc: Create a todo for todoTao::closeTodo unit test case.
+author: dingguodong
+version: 1.0.0
+
+fields:
+  - field: id
+    range: 1-10
+  - field: date
+    range: '`2023-04-23`'
+  - field: type
+    range: custom
+  - field: status
+    range: wait,doing,done,closed
+  - field: finishedDate
+    range: '`2023-04-23`'
+  - field: closedDate
+    range: '`2023-04-23`'

@@ -1,0 +1,84 @@
+.mini-program {
+    top: 66px;
+    right: 16px;
+    bottom: 16px;
+    left: 16px;
+    gap: 16px;
+}
+
+.mini-program .detail {
+    width: 390px;
+    background: #fff;
+}
+
+.mini-program .detail .header {
+    padding: 24px 20px 20px 20px;
+    gap: 20px;
+    color: var(--color-slate-800);
+    border-bottom: 1px solid var(--color-gray-200);
+}
+
+.mini-program .detail .header .btn-star {
+    top: 20px;
+    right: 20px;
+}
+
+.mini-program .detail .header .program-avatar {
+    width: 46px;
+    height: 46px;
+}
+
+.mini-program .detail .header .content .title {
+    font-size: 14px;
+    font-weight: 500;
+    padding-right: 64px;
+}
+
+.mini-program .detail .header .content .desc {
+    display: -webkit-box;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    word-break: break-all;
+}
+
+.mini-program .detail .body {
+    padding-top: 20px;
+    padding-left: 20px;
+    padding-right: 20px;
+}
+
+.mini-program .detail .body .language-model .btn {
+    color: var(--color-slate-700);
+}
+
+.mini-program .detail .body .language-model .btn:hover {
+    background: var(--color-gray-300);
+}
+
+.mini-program .detail .footer {
+    padding: 20px 20px 24px 20px;
+}
+
+
+#disabled-dialog .modal-dialog {
+    width: 480px;
+}
+
+#disabled-dialog .modal-body {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    font-size: 14px;
+    font-weight: 400;
+    line-height: 24px;
+}
+
+#disabled-dialog .modal-footer {
+    padding-top: 0;
+    padding-bottom: 32px;
+    justify-content: center;
+}
+#aiChatView .ai-chat-sendbox {margin-left: 44px; margin-right: 48px;}
+#aiChatView .is-no-message .ai-chat-sendbox {display: none;}

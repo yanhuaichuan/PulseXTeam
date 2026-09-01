@@ -1,0 +1,9 @@
+title: table zt_kanbangroup
+desc: "专业研发看板组"
+author: Sun Guangming
+version: "1.0"
+fields:
+    - field: kanban
+      range: 1-20
+    - field: region
+      range: 1-20

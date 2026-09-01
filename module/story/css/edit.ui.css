@@ -1,0 +1,12 @@
+.input-group #moduleIdBox{width:100%;}
+.input-group #planIdBox{width:100%;}
+.branchIdBox{width:120px;}
+
+#linkedStories .label, #linkStoriesBox .label, .twins .label{margin-right:8px;}
+.twins .title{margin-right:8px;}
+.twins .unlink{display:none; cursor: pointer;}
+.twins:hover .unlink{display:unset;}
+
+.picker-box{width:100%;}
+
+table.table-data th{width: 78px !important;}

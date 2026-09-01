@@ -1,0 +1,4 @@
+.verify-content {height: 300px; border: solid 1px var(--color-gray-300);}
+
+.clear-shadow {border: none; box-shadow: none;}
+.panel-body .relative {position: relative;}

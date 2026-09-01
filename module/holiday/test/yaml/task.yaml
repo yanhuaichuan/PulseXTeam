@@ -1,0 +1,20 @@
+title: execution.
+desc: execution data.
+author: Mengyi Liu
+version: "1.0"
+fields:
+  - field: estStarted
+    range: "20230901 000000:1D"
+    type: timestamp
+    format: "YYYY-MM-DD"
+    postfix: "\t"
+  - field: deadline
+    range: "20230907 000000:1D"
+    type: timestamp
+    format: "YYYY-MM-DD"
+    postfix: "\t"
+  - field: finishedDate
+    range: "20230905 000000:1D"
+    type: timestamp
+    format: "YYYY-MM-DD"
+    postfix: "\t"

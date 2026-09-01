@@ -1,0 +1,46 @@
+#!/usr/bin/env php
+<?php
+
+/**
+
+title=测试 storyModel::getPairsByList();
+timeout=0
+cid=18546
+
+- 步骤1：传入有效的需求ID列表，返回4个元素（空选项+3个需求） @4
+- 步骤2：验证ID为1的需求标题属性1 @需求标题1
+- 步骤3：传入单个需求ID，验证返回的需求标题属性5 @需求标题5
+- 步骤4：传入不存在的需求ID，只返回空选项 @1
+- 步骤5：传入混合存在和不存在的需求ID，验证存在的需求属性2 @需求标题2
+
+*/
+
+// 1. 导入依赖（路径固定，不可修改）
+include dirname(__FILE__, 5) . '/test/lib/init.php';
+include dirname(__FILE__, 2) . '/lib/model.class.php';
+
+// 2. zendata数据准备（根据需要配置）
+$story = zenData('story');
+$story->id->range('1-20');
+$story->title->range('需求标题1,需求标题2,需求标题3,需求标题4,需求标题5{15}');
+$story->product->range('1');
+$story->status->range('active');
+$story->stage->range('wait');
+$story->vision->range('rnd');
+$story->type->range('story');
+$story->openedBy->range('admin');
+$story->openedDate->range('`2024-01-01 10:00:00`');
+$story->gen(20);
+
+// 3. 用户登录（选择合适角色）
+su('admin');
+
+// 4. 创建测试实例（变量名与模块名一致）
+$storyTest = new storyModelTest();
+
+// 5. 🔴 强制要求：必须包含至少5个测试步骤
+r(count($storyTest->getPairsByListTest(array(1, 2, 3)))) && p() && e('4'); // 步骤1：传入有效的需求ID列表，返回4个元素（空选项+3个需求）
+r($storyTest->getPairsByListTest(array(1, 2, 3))) && p('1') && e('需求标题1'); // 步骤2：验证ID为1的需求标题
+r($storyTest->getPairsByListTest('5')) && p('5') && e('需求标题5'); // 步骤3：传入单个需求ID，验证返回的需求标题
+r(count($storyTest->getPairsByListTest(array(999, 1000)))) && p() && e('1'); // 步骤4：传入不存在的需求ID，只返回空选项
+r($storyTest->getPairsByListTest(array(1, 999, 2))) && p('2') && e('需求标题2'); // 步骤5：传入混合存在和不存在的需求ID，验证存在的需求

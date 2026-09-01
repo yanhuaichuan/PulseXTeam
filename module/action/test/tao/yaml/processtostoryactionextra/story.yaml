@@ -1,0 +1,45 @@
+---
+title: Story测试数据定义
+desc: processToStoryActionExtra方法测试数据
+
+fields:
+- field: id
+  note: 需求ID
+  range: 1-10
+  prefix: ""
+  postfix: ""
+- field: product
+  note: 产品ID
+  range: '1,1,1,1,1,2,2,2,3,3'
+  prefix: ""
+  postfix: ""
+- field: title
+  note: 需求标题
+  range: '普通产品需求1,普通产品需求2,普通产品需求3,普通产品需求4,普通产品需求5,影子产品需求1,影子产品需求2,影子产品需求3,影子产品需求4,影子产品需求5'
+  prefix: ""
+  postfix: ""
+- field: type
+  note: 需求类型
+  range: 'story'
+  prefix: ""
+  postfix: ""
+- field: status
+  note: 需求状态
+  range: 'active'
+  prefix: ""
+  postfix: ""
+- field: stage
+  note: 需求阶段
+  range: 'wait'
+  prefix: ""
+  postfix: ""
+- field: version
+  note: 版本号
+  range: '1'
+  prefix: ""
+  postfix: ""
+- field: deleted
+  note: 是否删除
+  range: '0'
+  prefix: ""
+  postfix: ""

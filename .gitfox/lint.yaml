@@ -1,0 +1,79 @@
+version: 1
+kind: pipeline
+spec:
+  stages:
+    - name: 质量检查
+      type: ci
+      spec:
+        envs:
+          SONAR_HOST_URL: https://codescan.qc.oop.cc
+          SONAR_TOKEN: ${{ secrets.get("codescan_sonar_token") }}
+        steps:
+          - name: 预处理
+            type: run
+            spec:
+              container:
+                image: hub.zentao.net/ci/alpine:3.19
+              script:
+              - SONAR_PROJECT_KEY=$(echo $CI_REPO_NAME-$GITFOX_COMMIT_AUTHOR | tr '/' ':')
+              - echo "export SONAR_PROJECT_KEY=$SONAR_PROJECT_KEY" >> $GITFOX_CUSTOM_ENV
+          - name: 配置scanner
+            type: run
+            spec:
+              container:
+                image: hub.zentao.net/ci/git:2.45.2
+              script:
+              - git diff --name-only --diff-filter=d ${GITFOX_COMMIT_AFTER} ${GITFOX_COMMIT_BEFORE} | tee .changes
+              - |
+                cat > sonar-project.properties <<EOL
+                sonar.projectKey=$(echo $CI_REPO_NAME-$GITFOX_COMMIT_AUTHOR | tr '/' ':')
+                sonar.sources=.
+                sonar.language=php
+                sonar.branch.name=${GITFOX_TARGET_BRANCH}
+                sonar.inclusions=$(xargs < .changes | tr ' ' ',')
+                sonar.working.directory=/tmp
+                sonar.exclusions=**/extension/**/ext/**,**/*.bak,**/*.sql,**/*.js,**/*.css,**/*.yaml,**/*.zip,**/*.out,**/lang/*,doc/*,misc/**,**/test/**
+                EOL
+              - cat sonar-project.properties
+          - name: 降级测试
+            type: run
+            spec:
+              container:
+                image: hub.zentao.net/ci/zentao-package:master-250527
+              script:
+              - DOWNGRADE_CODE_DIR=$(mktemp -d)
+              - mkdir $DOWNGRADE_CODE_DIR/diff
+              - grep -E '\.php$' .changes >/dev/null && (tar zcf - --files-from .changes | tar zxvf - -C $DOWNGRADE_CODE_DIR/diff) || exit 0
+              - ${ZENTAO_BUILD_PATH}/script/downgrade/dirDowngrade.sh -i -p 7.2,7.1,7.0 -c ${PWD}/misc -r $DOWNGRADE_CODE_DIR -o ${ZENTAO_BUILD_PATH} diff
+          - name: 扫描
+            type: run
+            spec:
+              container:
+                image: hub.zentao.net/ci/sonar-scanner-cli:10
+                pull: always
+              script:
+              - echo "run sonar-scanner"
+              - export TASK_ID=$(sonar-scanner -Dsonar.token=${SONAR_TOKEN} | grep -o 'task?id=.*' | cut -d = -f 2)
+              - wait-for-quality-gate
+          - name: 消息通知
+            type: plugin
+            when: failure()
+            spec:
+              inputs:
+                debug: true
+                custom: true
+                token: ${{ secrets.get("xuan_token") }}
+                caller: zenci
+                api: https://gw.easycorp.cn
+                title: "代码静态扫描门禁未通过"
+                content: |-
+                  代码库: {{ .GITFOX_REPO_NAME }}
+
+                  [分析报告]({{ .SONAR_HOST_URL }}/dashboard?branch={{ .GITFOX_TARGET_BRANCH }}&id={{ .SONAR_PROJECT_KEY }})
+
+                  帐号 guest/guest
+                url: ${GITFOX_BUILD_LINK}
+                users:
+                  "0": "liyang"
+                  "1": "{{ .GITFOX_COMMIT_AUTHOR }}"
+              name: gitfox-xuanim-plugin

@@ -1,0 +1,14 @@
+title: table zt_group
+desc: "用户组"
+author: automated export
+version: "1.0"
+fields:
+  - field: acl
+    note: "权限"
+    fields:
+    - field: acl1
+      range: '`{"programs":`'
+    - field: acl2
+      prefix: "["
+      range: "1,2"
+      postfix: "]}"

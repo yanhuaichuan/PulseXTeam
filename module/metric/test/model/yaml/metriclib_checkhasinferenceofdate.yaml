@@ -1,0 +1,74 @@
+---
+title: 度量推算记录数据定义
+desc: checkHasInferenceOfDate方法测试数据
+author: Claude
+version: 1.0
+
+fields:
+- field: id
+  range: 1-10
+
+- field: metricID
+  range: 1{10}
+
+- field: metricCode
+  range: test_metric_year{10}
+
+- field: system
+  range: 0{10}
+
+- field: program
+  range: 0{10}
+
+- field: project
+  range: 0{10}
+
+- field: product
+  range: 0{10}
+
+- field: execution
+  range: 0{10}
+
+- field: code
+  range: ""{10}
+
+- field: pipeline
+  range: ""{10}
+
+- field: repo
+  range: ""{10}
+
+- field: user
+  range: ""{10}
+
+- field: dept
+  range: ""{10}
+
+- field: calcType
+  range: inference{10}
+
+- field: calculatedBy
+  range: ""{10}
+
+- field: value
+  range: 100{5}, 200{3}, 300{2}
+
+- field: year
+  range: 2024{10}
+
+- field: month
+  range: 01{10}
+
+- field: week
+  range: 03{10}
+
+- field: day
+  range: 01{2}, 02{2}, 15{3}, 28{3}
+
+- field: date
+  range: "20240115 000000"
+  type: timestamp
+  format: YYYY-MM-DD hh:mm:ss
+
+- field: deleted
+  range: "0"{10}

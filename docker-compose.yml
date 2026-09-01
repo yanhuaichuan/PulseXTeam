@@ -1,0 +1,57 @@
+services:
+  mysql:
+    image: mysql:8.0
+    environment:
+      MYSQL_ROOT_PASSWORD: pulsex
+      MYSQL_DATABASE: pulsex
+      MYSQL_USER: pulsex
+      MYSQL_PASSWORD: pulsex
+    ports:
+      - "3306:3306"
+    volumes:
+      - pulsex_mysql:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-ppulsex"]
+      interval: 8s
+      timeout: 5s
+      retries: 20
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+
+  gateway:
+    build:
+      context: .
+      dockerfile: deploy/Dockerfile.gateway
+    environment:
+      NODE_ENV: production
+      GATEWAY_PORT: 3100
+      JWT_SECRET: ${JWT_SECRET:-pulsex-dev-secret-change-me}
+      DEMO_ACCOUNT: yanhuaichuan
+      DEMO_PASSWORD: pulsex
+      DB_HOST: mysql
+      DB_DATABASE: pulsex
+      DB_USER: pulsex
+      DB_PASSWORD: pulsex
+      REDIS_HOST: redis
+    ports:
+      - "3100:3100"
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_started
+
+  web:
+    build:
+      context: .
+      dockerfile: deploy/Dockerfile.web
+    ports:
+      - "8080:80"
+    depends_on:
+      - gateway
+
+volumes:
+  pulsex_mysql:

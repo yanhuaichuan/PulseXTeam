@@ -1,0 +1,22 @@
+{
+  "name": "@pulsex/realtime-service",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.ts",
+  "scripts": {
+    "dev": "SERVICE_NAME=realtime-service tsx watch src/index.ts",
+    "start": "tsx src/index.ts"
+  },
+  "dependencies": {
+    "@pulsex/config": "workspace:*",
+    "@pulsex/events": "workspace:*",
+    "@pulsex/server": "workspace:*",
+    "@pulsex/shared": "workspace:*",
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "@types/ws": "^8.5.13",
+    "tsx": "^4.19.2"
+  }
+}

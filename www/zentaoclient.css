@@ -1,0 +1,12 @@
+body.xxc-embed #menu {display: none!important;}
+body.xxc-embed #appsBar, body.xxc-embed #apps {left: 0!important;}
+body.xxc-embed #userMenu-toggle {display: none;}
+body.xxc-embed #toolbar {position: fixed; right: 130px; height: 47px; z-index: 100;}
+body.xxc-embed .re-login-btn {display: none;}
+body.xxc-embed .messagers {bottom: 40px !important;}
+body.xxc-embed #userDropDownMenu {display: none !important;}
+body.xxc-embed .titleBox #promptRegenerate {right: 120px;}
+body.xxc-embed #basicInfoLink {margin-right: 120px;}
+body.xxc-embed #appsBar {display: none;}
+body.xxc-embed #tutorial-start-btn {display: none;}
+body.xxc-embed #header {position: sticky; top: 0; z-index: 1000;}

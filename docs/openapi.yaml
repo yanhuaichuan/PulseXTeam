@@ -1,0 +1,46 @@
+openapi: 3.0.3
+info:
+  title: PulseX API
+  version: 0.1.0
+  description: REST + WebSocket gateway for PulseX Engineering Workspace.
+servers:
+  - url: http://localhost:3100
+paths:
+  /health:
+    get:
+      summary: Health check
+      responses:
+        "200":
+          description: ok
+  /api/v1/auth/login:
+    post:
+      summary: Login via Auth Adapter
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                account: { type: string }
+                password: { type: string }
+      responses:
+        "200":
+          description: JWT pair
+  /api/v1/projects:
+    get:
+      summary: List projects
+  /api/v1/projects/{id}/pulse:
+    get:
+      summary: Project pulse / health score
+  /api/v1/tasks:
+    get:
+      summary: List tasks
+    post:
+      summary: Create task
+  /api/v1/tasks/{id}:
+    patch:
+      summary: Update task status
+  /ws:
+    get:
+      summary: WebSocket realtime channel

@@ -1,0 +1,13 @@
+#copyProjectModal .copy-title {min-width: 120px;}
+#copyProjectModal .project-block {flex: 0 1 calc(50% - 0.5rem); padding: 20px 10px; overflow: hidden;}
+#copyProjectModal .project-block > span {width: 'auto'; overflow: hidden;}
+#copyProjectModal .project-block.btn.primary-outline span {width: calc(100% - 45px);}
+#copyProjects .btn:hover {--tw-ring-color: var(--color-primary-500);}
+#copyProjects .btn:before {background: none;}
+#copyProjects .btn.primary-outline {background-color: var(--color-primary-50);}
+#copyProjects .btn.primary-outline:after {position: absolute; content: '\e92f'; font-family: ZentaoIcon; font-size: 20px; right: 10px;}
+#copyProjects .btn.primary-outline span {color: rgba(var(--color-fore-rgb),var(--tw-text-opacity));}
+.productBox div[id^=plan] {flex: 1 1;}
+#mainContent .input-group.required {position: relative;}
+#mainContent .input-group.required:after {content: '*'; color: rgba(var(--color-danger-500-rgb),var(--tw-text-opacity)); position: absolute; top: 0.5rem; right: 0.125rem;}
+#form-project-create [data-name="begin"] .form-control {border-radius: var(--radius)}

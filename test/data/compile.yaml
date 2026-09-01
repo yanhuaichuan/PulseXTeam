@@ -1,0 +1,74 @@
+title: table zt_compile
+desc: ""
+author: automated export
+version: "1.0"
+fields:
+  - field: id
+    note: ""
+    range: 1-100
+    prefix: ""
+    postfix: ""
+    loop: 0
+    loopfix: ""
+    format: ""
+  - field: name
+    note: ""
+    range: 1-100
+    prefix: 构建
+    postfix: ""
+    loop: 0
+    loopfix: ""
+    format: ""
+  - field: job
+    note: ""
+    range: 1-100
+    prefix: ""
+    postfix: ""
+    loop: 0
+    loopfix: ""
+    format: ""
+  - field: queue
+    note: ""
+    range: 1-100
+    prefix: ""
+    postfix: ""
+    loop: 0
+    loopfix: ""
+    format: ""
+  - field: status
+    note: ""
+    range: 'success,failure,created,pending,running,create_fail,timeout,canceled,failed'
+    prefix: ""
+    postfix: ""
+    loop: 0
+    loopfix: ""
+    format: ""
+  - field: logs
+    note: ""
+    prefix: ""
+    postfix: ""
+    loop: 0
+    loopfix: ""
+    format: ""
+  - field: atTime
+    note: ""
+    prefix: ""
+    postfix: ""
+    loop: 0
+    loopfix: ""
+    format: ""
+  - field: tag
+    note: ""
+    prefix: ""
+    postfix: ""
+    loop: 0
+    loopfix: ""
+    format: ""
+  - field: createdBy
+    note: ""
+    range: 'admin'
+    prefix: ""
+    postfix: ""
+    loop: 0
+    loopfix: ""
+    format: ""

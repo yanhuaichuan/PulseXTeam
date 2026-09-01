@@ -1,0 +1,35 @@
+#tutorialTabs .tab-content {max-height: calc(100vh - 72px); overflow: auto;}
+
+.has-active-guide > .tutorial-guide {display: none;}
+.has-active-guide > .tutorial-guide.active {display: block;}
+
+.tutorial-guide-tasks {display: none;}
+.tutorial-guide.active .tutorial-guide-item .tutorial-guide-icon {display: none;}
+.tutorial-guide.active .tutorial-guide-item .tutorial-guide-trailing-icon {order: -1; opacity: 1; --tw-rotate: 90deg;}
+.tutorial-guide.active .tutorial-guide-tasks {display: block;}
+.tutorial-guide-list.is-single-guide .tutorial-guide-tasks {display: block;}
+.tutorial-guide-list.is-single-guide .tutorial-guide-item {display: none;}
+
+.tutorial-step-list {display: none;}
+.tutorial-task.active .tutorial-step-list {display: block;}
+
+.tutorial-task-start > span {display: none;}
+.tutorial-task[data-status="wait"] .tutorial-task-start > span[data-type="start"],
+.tutorial-task[data-status="doing"] .tutorial-task-start > span[data-type="continue"],
+.tutorial-task[data-status="done"] .tutorial-task-start > span[data-type="restart"] {display: inline;}
+.tutorial-task.active .tutorial-task-start {display: none;}
+
+.tutorial-task.active .tutorial-task-item {background-color: var(--color-primary-50); color: var(--color-primary-500); margin: 0 -10px; padding: 0 10px}
+
+.tutorial-step {position: relative;}
+.tutorial-step.active::before {content: ' '; width: 5px; height: 5px; border-radius: 100%; background: var(--color-primary-500); position: absolute; left: 2px; top: 10px}
+.tutorial-step.active .tutorial-step-title {color: var(--color-fore)}
+
+.is-single-type-mode #tutorialTabs .tabs-header {display: none;}
+.is-single-type-mode #tutorialTabs .tab-content {padding-top: 0;}
+.is-single-type-mode #tutorialTabs .tab-pane {display: block;}
+.pick-container {z-index: 1780;}
+.tutorial-has-mask #iframeWrapper {pointer-events: none;}
+.tutorial-has-mask #iframeWrapper::after {content: ''; position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0, 0, 0, 0.5); z-index: 1479;}
+
+.modal-dialog .modal-actions button[data-dismiss="modal"] {display: none;}

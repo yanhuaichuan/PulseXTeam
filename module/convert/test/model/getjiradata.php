@@ -1,0 +1,38 @@
+#!/usr/bin/env php
+<?php
+
+/**
+
+title=测试 convertModel::getJiraData();
+timeout=0
+cid=15775
+
+- 步骤1：使用file方法获取user模块数据，文件不存在返回空数组显示为0 @0
+- 步骤2：使用file方法获取issue模块数据，文件不存在返回空数组显示为0 @0
+- 步骤3：使用无效方法获取数据，调用file方法返回空数组显示为0 @0
+- 步骤4：获取不存在的模块数据，返回空数组显示为0 @0
+- 步骤5：使用限制参数获取数据，返回空数组显示为0 @0
+
+*/
+
+// 1. 导入依赖（路径固定，不可修改）
+include dirname(__FILE__, 5) . '/test/lib/init.php';
+include dirname(__FILE__, 2) . '/lib/model.class.php';
+
+// 2. 用户登录（选择合适角色）
+su('admin');
+
+// 3. 设置测试环境（模拟session数据）
+global $app;
+$app->session->jiraDB = 'test_jira_db';
+$app->session->jiraMethod = 'file';
+
+// 4. 创建测试实例（变量名与模块名一致）
+$convertTest = new convertModelTest();
+
+// 5. 🔴 强制要求：必须包含至少5个测试步骤
+r($convertTest->getJiraDataTest('file', 'user', 0, 0)) && p() && e('0'); // 步骤1：使用file方法获取user模块数据，文件不存在返回空数组显示为0
+r($convertTest->getJiraDataTest('file', 'issue', 0, 0)) && p() && e('0'); // 步骤2：使用file方法获取issue模块数据，文件不存在返回空数组显示为0
+r($convertTest->getJiraDataTest('invalid', 'user', 0, 0)) && p() && e('0'); // 步骤3：使用无效方法获取数据，调用file方法返回空数组显示为0
+r($convertTest->getJiraDataTest('file', 'nonexistent', 0, 0)) && p() && e('0'); // 步骤4：获取不存在的模块数据，返回空数组显示为0
+r($convertTest->getJiraDataTest('file', 'user', 0, 5)) && p() && e('0'); // 步骤5：使用限制参数获取数据，返回空数组显示为0

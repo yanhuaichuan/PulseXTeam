@@ -1,0 +1,17 @@
+.case-precondition {color: var(--color-gray-700);}
+#caseStepForm, #caseStepForm .action-td {padding: 0px;}
+#caseStepForm tr {border-width: 0px;}
+#caseStepForm thead {background-color: unset;}
+#caseStepForm thead > tr > * {padding-left: 0px; font-size: 14px; color: var(--color-gray-900); font-weight: 600;}
+#caseStepForm thead > tr > td.result-td {padding: 0.5rem;}
+#caseStepForm tbody > tr > td:not(.p-0) {padding: 0.5rem; vertical-align: top; line-height: 1.5rem;}
+#caseStepForm tbody > tr > td.real-td, #caseStepForm tbody > tr > td.result-td {padding: 0.25rem 0.5rem; vertical-align: middle;}
+#caseStepForm tbody > tr > td.real-td {padding: 0.25rem 0px;}
+#caseStepForm tbody > tr > td .inputGroup {line-height: 1.5rem;}
+#caseStepForm .step-item-id {color: var(--color-gray-500);}
+
+.modal[id^='fileModal'] .modal-dialog {max-height: 100%;}
+
+.files-list>li>a {display: inline; word-wrap: break-word; color: #313c52; line-height: 24px}
+.files-list .icon.icon-file-text {padding-left: 7px}
+.files-list .right-icon .btn {padding: 0 6px; height: 20px}

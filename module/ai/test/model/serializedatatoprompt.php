@@ -1,0 +1,29 @@
+#!/usr/bin/env php
+<?php
+
+/**
+
+title=测试 aiModel::serializeDataToPrompt();
+timeout=0
+cid=15063
+
+- 执行aiTest模块的serializeDataToPromptTest方法，参数是'task', '', array  @0
+- 执行aiTest模块的serializeDataToPromptTest方法，参数是'bug', array  @0
+- 执行aiTest模块的serializeDataToPromptTest方法，参数是'project', array  @0
+- 执行aiTest模块的serializeDataToPromptTest方法，参数是'task', ', task.name, ', array  @{"任务":{"任务名称":"测试任务"}}
+- 执行aiTest模块的serializeDataToPromptTest方法，参数是'story', array  @0
+
+*/
+
+include dirname(__FILE__, 5) . '/test/lib/init.php';
+include dirname(__FILE__, 2) . '/lib/model.class.php';
+
+su('admin');
+
+$aiTest = new aiModelTest();
+
+r($aiTest->serializeDataToPromptTest('task', '', array()))                                                 && p() && e('0');
+r($aiTest->serializeDataToPromptTest('bug', array(array('bug', 'title')), array()))                        && p() && e('0');
+r($aiTest->serializeDataToPromptTest('project', array(), array()))                                         && p() && e('0');
+r($aiTest->serializeDataToPromptTest('task', ',task.name,', array('task' => array('name' => '测试任务')))) && p() && e('{"任务":{"任务名称":"测试任务"}}');
+r($aiTest->serializeDataToPromptTest('story', array(), array()))                                           && p() && e('0');

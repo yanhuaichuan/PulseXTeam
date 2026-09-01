@@ -1,0 +1,53 @@
+@import './common.css';
+
+:root
+{
+  /* generate from https://uicolors.app/create */
+  --color-primary-50: #F5F3FF;
+  --color-primary-100: #EDE9FE;
+  --color-primary-200: #DDD6FE;
+  --color-primary-300: #C4B6FC;
+  --color-primary-400: #A78CF9;
+  --color-primary-500: #8657F4;
+  --color-primary-600: #784DC9;
+  --color-primary-700: #6C2AD7;
+  --color-primary-800: #5A23B4;
+  --color-primary-900: #4B1E94;
+  --color-primary-950: #2E1164;
+  --color-primary-50-rgb: 245, 243, 255;
+  --color-primary-100-rgb: 237, 233, 254;
+  --color-primary-200-rgb: 221, 214, 254;
+  --color-primary-300-rgb: 196, 182, 252;
+  --color-primary-400-rgb: 167, 140, 249;
+  --color-primary-500-rgb: 134, 87, 244;
+  --color-primary-600-rgb: 120, 77, 201;
+  --color-primary-700-rgb: 108, 42, 215;
+  --color-primary-800-rgb: 90, 35, 180;
+  --color-primary-900-rgb: 75, 30, 148;
+  --color-primary-950-rgb: 46, 17, 100;
+
+  --color-secondary-50: #FCF6FD;
+  --color-secondary-100: #F9EBFC;
+  --color-secondary-200: #F3D7F7;
+  --color-secondary-300: #ECB7F0;
+  --color-secondary-400: #E08BE7;
+  --color-secondary-500: #C848D1;
+  --color-secondary-600: #BD4CB4;
+  --color-secondary-700: #98319A;
+  --color-secondary-800: #7D2A7E;
+  --color-secondary-900: #682768;
+  --color-secondary-950: #430F43;
+  --color-secondary-50-rgb: 252, 246, 253;
+  --color-secondary-100-rgb: 249, 235, 252;
+  --color-secondary-200-rgb: 243, 215, 247;
+  --color-secondary-300-rgb: 236, 183, 240;
+  --color-secondary-400-rgb: 224, 139, 231;
+  --color-secondary-500-rgb: 200, 72, 209;
+  --color-secondary-600-rgb: 189, 76, 180;
+  --color-secondary-700-rgb: 152, 49, 154;
+  --color-secondary-800-rgb: 125, 42, 126;
+  --color-secondary-900-rgb: 104, 39, 104;
+  --color-secondary-950-rgb: 67, 15, 67;
+
+  --zt-menu-active-bg: var(--color-primary-400)!important;
+}

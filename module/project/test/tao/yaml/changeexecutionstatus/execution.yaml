@@ -1,0 +1,17 @@
+# ZenData yaml语法：https://www.zendata.cn/book/zendata/zendata-syntax-glance-72.html
+title: changeexecutionstatus-execution
+author: chaideqing
+version: '1.0'
+fields:
+    - field: id
+      range: '1-2'
+    - field: type
+      range: 'project, sprint'
+    - field: project
+      range: '0-1'
+    - field: multiple
+      range: '1,0'
+    - field: status
+      range: 'active'
+    - field: realend
+      range: "`2023-12-23`"

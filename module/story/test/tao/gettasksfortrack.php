@@ -1,0 +1,37 @@
+#!/usr/bin/env php
+<?php
+
+/**
+
+title=测试 storyTao::getTasksForTrack();
+timeout=0
+cid=18648
+
+- 步骤1：正常情况查询多个需求的任务，检查返回数组中需求的数量 @1
+- 步骤2：空数组查询，期望返回空数组，转为数组长度判断 @0
+- 步骤3：不存在的需求ID查询，期望返回空数组，检查数组长度 @0
+- 步骤4：单个需求ID查询，检查返回结果有1个需求 @1
+- 步骤5：验证返回结果为数组类型 @1
+
+*/
+
+// 1. 导入依赖（路径固定，不可修改）
+include dirname(__FILE__, 5) . '/test/lib/init.php';
+include dirname(__FILE__, 2) . '/lib/tao.class.php';
+
+// 2. zendata数据准备（根据需要配置）
+zendata('task')->loadYaml('task_gettasksfortrack', false, 2)->gen(20);
+zendata('taskteam')->loadYaml('taskteam_gettasksfortrack', false, 2)->gen(10);
+
+// 3. 用户登录（选择合适角色）
+su('admin');
+
+// 4. 创建测试实例（变量名与模块名一致）
+$storyTest = new storyTaoTest();
+
+// 5. 🔴 强制要求：必须包含至少5个测试步骤
+r(count($storyTest->getTasksForTrackTest(array(1, 2)))) && p() && e(1); // 步骤1：正常情况查询多个需求的任务，检查返回数组中需求的数量
+r($storyTest->getTasksForTrackTest(array())) && p() && e('0'); // 步骤2：空数组查询，期望返回空数组，转为数组长度判断
+r(count($storyTest->getTasksForTrackTest(array(999, 998)))) && p() && e(0); // 步骤3：不存在的需求ID查询，期望返回空数组，检查数组长度
+r(count($storyTest->getTasksForTrackTest(array(1)))) && p() && e(1); // 步骤4：单个需求ID查询，检查返回结果有1个需求
+r(is_array($storyTest->getTasksForTrackTest(array(3)))) && p() && e(1); // 步骤5：验证返回结果为数组类型

@@ -1,0 +1,85 @@
+title: table zt_serverroom
+desc: "机房"
+author: automated export
+version: "1.0"
+fields:
+  - field: id
+    note: "ID"
+    range: 1-10000
+    prefix: ""
+    postfix: ""
+    loop: 0
+    format: ""
+  - field: name
+    note: "名称"
+    range: 1-10000
+    prefix: "这是机房名称"
+    postfix: ""
+    loop: 0
+    format: ""
+  - field: city
+    note: "城市"
+    range: beijing,hangzhou,guangdong
+    prefix: ""
+    postfix: ""
+    loop: 0
+    format: ""
+  - field: line
+    note: "线路类型"
+    range: telecom,unicom,mobile,double,bgp
+    prefix: ""
+    postfix: ""
+    loop: 0
+    format: ""
+  - field: bandwidth
+    note: "带宽"
+    range: 1-100
+    prefix: ""
+    postfix: "M"
+    loop: 0
+    format: ""
+  - field: provider
+    note: "服务商"
+    range: aliyun,qingyun
+    prefix: ""
+    postfix: ""
+    loop: 0
+    format: ""
+  - field: owner
+    note: "负责人"
+    fields:
+    - field: account1
+      range: admin,user{99},test{100},dev{100},pm{100},po{100},td{100},pd{100},qd{100},top{100},outside{100},others{100},a,bb,ccc,qwuiadsd?!2as@#%$aasd~aj1!@#1
+    - field: account2
+      range: "[],1-99,1-100,1-100,1-100,1-100,1-100,1-100,1-100,1-100,1-100,1-100,[]{4}"
+  - field: createdBy
+    note: "创建者"
+    fields:
+    - field: account1
+      range: admin,user{99},test{100},dev{100},pm{100},po{100},td{100},pd{100},qd{100},top{100},outside{100},others{100},a,bb,ccc,qwuiadsd?!2as@#%$aasd~aj1!@#1
+    - field: account2
+      range: "[],1-99,1-100,1-100,1-100,1-100,1-100,1-100,1-100,1-100,1-100,1-100,[]{4}"
+  - field: createdDate
+    note: "创建日期"
+    range: "(-1M)-(+1w):-1D"
+    type: timestamp
+    format: "YYYY-MM-DD hh:mm:ss"
+  - field: editedBy
+    note: "编辑者"
+    fields:
+    - field: account1
+      range: admin,user{99},test{100},dev{100},pm{100},po{100},td{100},pd{100},qd{100},top{100},outside{100},others{100},a,bb,ccc,qwuiadsd?!2as@#%$aasd~aj1!@#1
+    - field: account2
+      range: "[],1-99,1-100,1-100,1-100,1-100,1-100,1-100,1-100,1-100,1-100,1-100,[]{4}"
+  - field: editedDate
+    note: "编辑日期"
+    range: "(-1M)-(+1w):-1D"
+    type: timestamp
+    format: "YYYY-MM-DD hh:mm:ss"
+  - field: deleted
+    note: "是否删除"
+    range: 0
+    prefix: ""
+    postfix: ""
+    loop: 0
+    format: ""

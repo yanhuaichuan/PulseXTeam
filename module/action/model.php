@@ -1,0 +1,2709 @@
+<?php
+declare(strict_types=1);
+
+/**
+ * The model file of action module of ZenTaoPMS.
+ *
+ * @copyright   Copyright 2009-2023 禅道软件（青岛）有限公司(ZenTao Software (Qingdao) Co., Ltd. www.cnezsoft.com)
+ * @license     ZPL(http://zpl.pub/page/zplv12.html) or AGPL(https://www.gnu.org/licenses/agpl-3.0.en.html)
+ * @author      Chunsheng Wang <chunsheng@cnezsoft.com>
+ * @package     action
+ * @version     $Id: model.php 5028 2013-07-06 02:59:41Z wyd621@gmail.com $
+ * @link        https://www.zentao.net
+ */
+?>
+<?php
+class actionModel extends model
+{
+    const BE_UNDELETED  = 0;    // The deleted object has been undeleted.
+    const CAN_UNDELETED = 1;    // The deleted object can be undeleted.
+    const BE_HIDDEN     = 2;    // The deleted object has been hidden.
+    const MAXCOUNT      = 1000;
+
+    /**
+     * 创建一个操作记录。
+     * Create a action.
+     *
+     * @param  string           $objectType
+     * @param  int              $objectID
+     * @param  string           $actionType
+     * @param  string|bool      $comment
+     * @param  string|int|float $extra        the extra info of this action, according to different modules and actions, can set different extra.
+     * @param  string           $actor
+     * @param  bool             $autoDelete
+     * @access public
+     * @return int|bool
+     */
+    public function create(string $objectType, int $objectID, string $actionType, string|bool $comment = '', string|int|float $extra = '', string $actor = '', bool $autoDelete = true): int|bool
+    {
+        if(strtolower($actionType) == 'commented' && empty($comment)) return false;
+
+        $actor      = $actor ? $actor : (!empty($this->app->user->account) ? $this->app->user->account : 'system');
+        $actionType = strtolower($actionType);
+        $actor      = ($actionType == 'openedbysystem' || $actionType == 'closedbysystem') ? '' : $actor;
+        if($actor == 'guest' && $actionType == 'logout') return false;
+
+        $objectType = str_replace('`', '', $objectType);
+        $extra      = (string)$extra;
+
+        $action             = new stdclass();
+        $action->objectType = strtolower($objectType);
+        $action->objectID   = $objectID;
+        $action->actor      = $actor;
+        $action->action     = $actionType;
+        $action->date       = helper::now();
+        $action->extra      = (string)$extra;
+        if(!$this->app->upgrading) $action->vision = $this->config->vision;
+        if($objectType == 'story' && in_array($actionType, array('reviewpassed', 'reviewrejected', 'reviewclarified', 'reviewreverted', 'synctwins'))) $action->actor = $this->lang->action->system;
+
+        /* 使用purifier处理注解。 */
+        /* Use purifier to process comment. Fix bug #2683. */
+        if(empty($comment)) $comment = '';
+        $action->comment = fixer::stripDataTags($comment);
+
+        $uid = $this->post->uid;
+        if(is_string($uid)) $uid = array($uid);
+        if(!is_array($uid)) $uid = array();
+        $this->loadModel('file');
+        foreach($uid as $value)
+        {
+            $action = $this->file->processImgURL($action, 'comment', $value);
+            if($autoDelete) $this->file->autoDelete($value);
+        }
+
+        /* 获取对象的产品项目以及执行。 */
+        /* Get product project and execution for this object. */
+        $relation          = $this->getRelatedFields($action->objectType, $objectID, $actionType, $extra);
+        $action->product   = $relation['product'];
+        $action->project   = (int)$relation['project'];
+        $action->execution = (int)$relation['execution'];
+        $this->dao->insert(TABLE_ACTION)->data($action)->autoCheck()->exec();
+        $actionID = $this->dao->lastInsertID();
+
+        $hasProductTable = true;
+        $hasRecentTable  = true;
+        if($this->app->upgrading)
+        {
+            $fromVersion = $this->loadModel('setting')->getItem('owner=system&module=common&section=global&key=version');
+            if(is_numeric($fromVersion[0]) && version_compare($fromVersion, '18.6', '<'))               $hasRecentTable = false;
+            if(strpos($fromVersion, 'pro') !== false) $hasRecentTable = false;
+            if(strpos($fromVersion, 'biz') !== false && version_compare($fromVersion, 'biz8.6',   '<')) $hasRecentTable = false;
+            if(strpos($fromVersion, 'max') !== false && version_compare($fromVersion, 'max4.6',   '<')) $hasRecentTable = false;
+            if(strpos($fromVersion, 'ipd') !== false && version_compare($fromVersion, 'ipd1.0.1', '<')) $hasRecentTable = false;
+
+            if(is_numeric($fromVersion[0]) && version_compare($fromVersion, '21.7.1', '<='))            $hasProductTable = false;
+            if(strpos($fromVersion, 'pro') !== false) $hasProductTable = false;
+            if(strpos($fromVersion, 'biz') !== false && version_compare($fromVersion, 'biz12.0', '<=')) $hasProductTable = false;
+            if(strpos($fromVersion, 'max') !== false && version_compare($fromVersion, 'max7.0',  '<=')) $hasProductTable = false;
+            if(strpos($fromVersion, 'ipd') !== false && version_compare($fromVersion, 'ipd4.0',  '<=')) $hasProductTable = false;
+        }
+
+        if($hasProductTable)
+        {
+            $productIdList = array_filter(explode(',', $action->product));
+            foreach($productIdList as $productID) $this->dao->insert(TABLE_ACTIONPRODUCT)->set('action')->eq($actionID)->set('product')->eq($productID)->exec();
+        }
+
+        if($actionType == 'commented')
+        {
+            $oldAction = new stdclass();
+            $oldAction->id = $actionID;
+            $newAction = clone $oldAction;
+
+            $this->file->processFileDiffsForObject('comment', $oldAction, $newAction);
+            if(!empty($newAction->files))
+            {
+                $action->files = $newAction->files;
+                $this->dao->update(TABLE_ACTION)->set('files')->eq($newAction->files)->where('id')->eq($actionID)->exec();
+            }
+            $changes = common::createChanges($oldAction, $newAction);
+            if($changes) $this->logHistory($actionID, $changes);
+        }
+        if($hasRecentTable)
+        {
+            $action->id = $actionID;
+            $this->dao->insert(TABLE_ACTIONRECENT)->data($action)->autoCheck()->exec();
+        }
+
+        $this->file->updateObjectID($uid, $objectID, $objectType);
+
+        if(empty($this->app->installing) && empty($this->app->upgrading)) $this->loadModel('message')->send(strtolower($objectType), $objectID, $actionType, $actionID, $actor, $extra);
+
+        $this->saveIndex($objectType, $objectID, $actionType);
+
+        $changeFunc = 'after' . ucfirst($objectType);
+        if(method_exists($this, $changeFunc)) call_user_func_array(array($this, $changeFunc), array($action, $actionID));
+
+        return $actionID;
+    }
+
+    /**
+     * 访问任务或者bug时，更新action的read字段。
+     * Update read field of action when view a task/bug.
+     *
+     * @param  string $objectType
+     * @param  int    $objectID
+     * @access public
+     * @return bool
+     */
+    public function read(string $objectType, int $objectID): bool
+    {
+        $this->dao->update(TABLE_ACTION)
+            ->set('`read`')->eq(1)
+            ->where('objectType')->eq($objectType)
+            ->andWhere('objectID')->eq($objectID)
+            ->andWhere('`read`')->eq(0)
+            ->exec();
+
+        return !dao::isError();
+    }
+
+    /**
+     * 获取对象的产品项目以及执行。
+     * Get product, project, execution of the object.
+     *
+     * @param  string $objectType
+     * @param  int    $objectID
+     * @param  string $actionType
+     * @param  string $extra
+     * @access public
+     * @return array
+     */
+    public function getRelatedFields(string $objectType, int $objectID, string $actionType = '', string $extra = ''): array
+    {
+        /* 处理项目、执行、产品、计划相关。 */
+        /* Process project, execution, product, plan related. */
+        if(in_array($objectType, array('project', 'execution', 'product', 'program', 'marketresearch')))
+        {
+            list($product, $project, $execution) = $this->actionTao->getNoFilterRequiredRelation($objectType, $objectID);
+            return array('product' => ',' . implode(',', $product) . ',', 'project' => $project, 'execution' => $execution);
+        }
+
+        /* 过滤不在配置项中的类型。 */
+        /* Filter object types not in configuration items。 */
+        $product = array(0);
+        $project = $execution = 0;
+        if(strpos($this->config->action->needGetRelateField, ",{$objectType},") !== false)
+        {
+            list($product, $project, $execution) = $this->actionTao->getNeedRelatedFields($objectType, $objectID, $actionType, $extra);
+            if($actionType == 'unlinkedfromproject' || $actionType == 'linked2project') $project = (int)$extra ;
+            if(in_array($actionType, array('unlinkedfromexecution', 'linked2execution', 'linked2kanban'))) $execution = (int)$extra;
+
+            if($execution && !$project) $project = $this->dao->select('project')->from(TABLE_EXECUTION)->where('id')->eq($execution)->fetch('project');
+        }
+        return array('product' => is_array($product) ? ',' . implode(',', $product) . ',': ',' . $product . ',', 'project' => $project, 'execution' => $execution);
+    }
+
+    /**
+     * 根据对象类型和对象ID获取操作记录。
+     * Get actions by objectType and objectID.
+     *
+     * @param  string    $objectType
+     * @param  array|int $objectID
+     * @access public
+     * @return array
+     */
+    public function getList(string $objectType, array|int $objectID): array
+    {
+        $this->loadModel('file');
+        $this->loadModel('workflow');
+
+        $modules   = $objectType == 'module' ? $this->dao->select('id')->from(TABLE_MODULE)->where('root')->in($objectID)->fetchPairs('id') : array();
+        $commiters = $this->loadModel('user')->getCommiters();
+        $actions   = $this->actionTao->getActionListByTypeAndID($objectType, $objectID, $modules);
+        $histories = $this->getHistory(array_keys($actions));
+        $files     = $this->file->groupByObjectID('comment', array_keys($actions));
+        $flowList  = array();
+        if($objectType == 'project') $actions = $this->processProjectActions($actions);
+        foreach($actions as $actionID => $action)
+        {
+            $actionName = strtolower($action->action);
+            if($this->config->edition != 'open' && !isset($flowList[$action->objectType])) $flowList[$action->objectType] = $this->workflow->getByModule($action->objectType);
+
+            if(substr($actionName, 0, 7)  == 'linked2')      $this->actionTao->getLinkedExtra($action, substr($actionName, 7));
+            if(substr($actionName, 0, 12) == 'unlinkedfrom') $this->actionTao->getLinkedExtra($action, substr($actionName, 12));
+
+            if(in_array($actionName, array('svncommited', 'gitcommited')) && isset($commiters[$action->actor])) $action->actor = $commiters[$action->actor];
+            if(!in_array($action->objectType, array('feedback', 'ticket')) && $actionName == 'tostory') $this->actionTao->processToStoryActionExtra($action);
+
+            if($actionName == 'moved' && $action->objectType != 'module') $this->actionTao->processActionExtra(TABLE_PROJECT, $action, 'name', 'execution', 'task');
+            if($actionName == 'frombug' && common::hasPriv('bug', 'view')) $action->extra = html::a(helper::createLink('bug', 'view', "bugID={$action->extra}"), $action->extra);
+            if($actionName == 'importedcard') $this->actionTao->processActionExtra(TABLE_KANBAN, $action, 'name', 'kanban', 'view', true);
+            if($actionName == 'createchildren') $this->actionTao->processCreateChildrenActionExtra($action);
+            if($actionName == 'createrequirements') $this->actionTao->processCreateRequirementsActionExtra($action);
+            if($actionName == 'deletechildrendemand') $this->actionTao->processActionExtra(TABLE_DEMAND, $action, 'title', 'demand', 'view');
+            if($actionName == 'createchildrendemand') $this->actionTao->processLinkStoryAndBugActionExtra($action, 'demand', 'view');
+            if($actionName == 'buildopened') $this->actionTao->processActionExtra(TABLE_BUILD, $action, 'name', 'build', 'view');
+            if($actionName == 'fromlib' && $action->objectType == 'case') $this->actionTao->processActionExtra(TABLE_TESTSUITE, $action, 'name', 'caselib', 'browse', false, helper::hasFeature('caselib'));
+            if($actionName == 'changedbycharter' && $action->objectType == 'story') $this->actionTao->processActionExtra(TABLE_CHARTER, $action, 'name', 'charter', 'view');
+            if(($actionName == 'finished' && $objectType == 'todo') || ($actionName == 'closed' && in_array($action->objectType, array('story', 'demand'))) || ($actionName == 'resolved' && $action->objectType == 'bug')) $this->actionTao->processAppendLinkByExtra($action);
+            if($actionName == 'distributed' && $objectType == 'story') $this->actionTao->processActionExtra(TABLE_DEMAND, $action, 'title', 'demand', 'view', false, $this->config->vision != 'or' ? false : true);
+
+            if(in_array($actionName, array('retracted', 'restored'))) $this->actionTao->processActionExtra(TABLE_STORY, $action, 'title', 'story', 'storyView');
+            if(in_array($actionName, array('totask', 'linkchildtask', 'unlinkchildrentask', 'linkparenttask', 'unlinkparenttask', 'deletechildrentask', 'converttotask')) && $action->objectType != 'feedback') $this->actionTao->processActionExtra(TABLE_TASK, $action, 'name', 'task', 'view');;
+            if(in_array($actionName, array('linkchildstory', 'unlinkchildrenstory', 'linkparentstory', 'unlinkparentstory', 'deletechildrenstory', 'createchildrenstory'))) $this->actionTao->processActionExtra(TABLE_STORY, $action, 'title', 'story', 'storyView');
+            if(in_array($actionName, array('testtaskopened', 'testtaskstarted', 'testtaskclosed'))) $this->actionTao->processActionExtra(TABLE_TESTTASK, $action, 'name', 'testtask', 'view');
+            if(in_array($actionName, array('importfromstorylib', 'importfromrisklib', 'importfromissuelib', 'importfromopportunitylib')) && in_array($this->config->edition, array('max', 'ipd'))) $this->actionTao->processActionExtra(TABLE_ASSETLIB, $action, 'name', 'assetlib', $action->objectType);
+            if(in_array($actionName, array('opened', 'managed', 'edited')) && in_array($objectType, array('execution', 'project'))) $this->processExecutionAndProjectActionExtra($action);
+            if(in_array($actionName, array('linkstory', 'unlinkstory', 'linkur', 'unlinkur', 'linkrelatedstory', 'unlinkrelatedstory'))) $this->actionTao->processLinkStoryAndBugActionExtra($action, 'story', 'storyView');
+            if(in_array($actionName, array('linkbug', 'unlinkbug'))) $this->actionTao->processLinkStoryAndBugActionExtra($action, 'bug', 'view');
+            if($actionName == 'repocreated') $action->extra = str_replace("class='iframe'", 'data-app="devops"', $action->extra);
+            if($actionName == 'createdsnapshot' && in_array($action->objectType, array('vm', 'zanode')) && $action->extra == 'defaultSnap') $action->actor = $this->lang->action->system;
+            if($actionName == 'syncgrade') $this->actionTao->processStoryGradeActionExtra($action);
+            if(in_array($actionName, array('createdsubtabledata', 'editedsubtabledata', 'deletedsubtabledata'))) $action->extra = !empty($flowList[$action->objectType]->name) ? $flowList[$action->objectType]->name . $action->objectID : '';
+
+            $action->history = zget($histories, $actionID, array());
+            foreach($action->history as $history)
+            {
+                if($history->field == 'subversion' || $history->field == 'git')
+                {
+                    $history->diff = str_replace(array("class='iframe'", '+'), array("data-size='{\"width\": 800, \"height\": 500}' data-toggle='modal'", '%2B'), $history->diff);
+                }
+
+                if(in_array($history->field, array('adjustmemory', 'adjustcpu', 'adjustvol', 'adjustmemorychange', 'adjustcpuchange', 'adjustvolchange')))
+                {
+                    if(empty($history->newValue) && empty($history->new)) $history->newValue = $this->lang->action->noLimit;
+                    if(empty($history->oldValue) && empty($history->old)) $history->oldValue = $this->lang->action->noLimit;
+                }
+
+                $history->new = !empty($history->newValue) ? $history->newValue : $history->new;
+                $history->old = !empty($history->oldValue) ? $history->oldValue : $history->old;
+                $history = $this->file->replaceImgURL($history, 'old,new');
+            }
+
+            $action->comment = $this->file->setImgSize($action->comment, $this->config->action->commonImgSize);
+            $action->files   = !empty($files[$actionID]) ? $files[$actionID] : array();
+            $actions[$actionID] = $action;
+        }
+        return $actions;
+    }
+
+    /**
+     * 将类型、状态等键值转换为具体的值。
+     * Process object type, status and etc.
+     *
+     * @param  object  $history
+     * @access public
+     * @return object
+     */
+    public function processHistory(?object $history = null): object
+    {
+        if(empty($history)) return $history;
+        $users          = $this->loadModel('user')->getPairs('noletter');
+        $action         = $this->dao->select('objectType,objectID')->from(TABLE_ACTION)->where('id')->eq($history->action)->fetch();
+        $objectType     = $action->objectType == 'story' ? $this->dao->select('type')->from(TABLE_STORY)->where('id')->eq($action->objectID)->fetch('type') : $action->objectType;
+        $objectTypeList = array();
+        $history->old   = (string)$history->old;
+        $history->new   = (string)$history->new;
+
+        if(!isset($objectTypeList[$objectType])) $this->app->loadLang($objectType);
+        $objectTypeList[$objectType] = $objectType;
+
+        if(isset($this->config->action->approvalFields[$history->field]))
+        {
+            $fieldListVar = $this->config->action->approvalFields[$history->field];
+            $fieldList    = isset($this->lang->action->{$fieldListVar}) ? $this->lang->action->{$fieldListVar} : array();
+
+            if(isset($fieldList[$history->old])) $history->oldValue = $fieldList[$history->old];
+            if(isset($fieldList[$history->new])) $history->newValue = $fieldList[$history->new];
+        }
+        elseif(isset($this->config->action->multipleObjectFields[$objectType][$history->field]))
+        {
+            $fieldListVar = $this->config->action->multipleObjectFields[$objectType][$history->field];
+            $fieldList    = isset($this->lang->{$objectType}->{$fieldListVar}) ? $this->lang->{$objectType}->{$fieldListVar} : array();
+            if(!empty($history->old))
+            {
+                $history->oldValue = '';
+                $oldValues = explode(',', $history->old);
+                foreach($oldValues as $value) $history->oldValue .= zget($fieldList, $value) . ',';
+                $history->oldValue = trim($history->oldValue, ',');
+            }
+
+            if(!empty($history->new))
+            {
+                $history->newValue = '';
+                $newValues = explode(',', $history->new);
+                foreach($newValues as $value) $history->newValue .= zget($fieldList, $value) . ',';
+                $history->newValue = trim($history->newValue, ',');
+            }
+        }
+        elseif(strpos(",{$this->config->action->userFields},", ",{$history->field},") !== false)
+        {
+            if(isset($users[$history->old])) $history->oldValue = $users[$history->old];
+            if(isset($users[$history->new])) $history->newValue = $users[$history->new];
+        }
+        elseif(strpos(",{$this->config->action->multipleUserFields},", ",{$history->field},") !== false)
+        {
+            if(!empty($history->old))
+            {
+                $history->oldValue = '';
+                $oldValues = explode(',', $history->old);
+                foreach($oldValues as $value) $history->oldValue .= zget($users, $value) . ',';
+                $history->oldValue = trim($history->oldValue, ',');
+            }
+
+            if(!empty($history->new))
+            {
+                $history->newValue = '';
+                $newValues = explode(',', $history->new);
+                foreach($newValues as $value) $history->newValue .= zget($users, $value) . ',';
+                $history->newValue = trim($history->newValue, ',');
+            }
+        }
+        else
+        {
+            $fieldListVar = isset($this->config->action->objectFields[$objectType][$history->field]) ? $this->config->action->objectFields[$objectType][$history->field] : $history->field . 'List';
+            $fieldList    = isset($this->lang->{$objectType}->{$fieldListVar}) ? $this->lang->{$objectType}->{$fieldListVar} : array();
+
+            if(isset($fieldList[$history->old])) $history->oldValue = $fieldList[$history->old];
+            if(isset($fieldList[$history->new])) $history->newValue = $fieldList[$history->new];
+        }
+
+        /* 如果是升级, 检查oldValue和newValue字段是否存在。以防止从老版本升级的时候，而这两个字段不存在，导致升级失败。 */
+        if(!empty($this->app->upgrading) && (isset($history->oldValue) || isset($history->newValue)))
+        {
+            $existHistory = $this->dao->select('*')->from(TABLE_HISTORY)->limit(1)->fetch();
+            if(!isset($existHistory->oldValue)) unset($history->oldValue, $history->newValue);
+        }
+
+        return $history;
+    }
+
+    /**
+     * 将项目行动类型转换为通用行动类型。
+     * Process Project Actions change actionStype.
+     *
+     * @param  array  $actions
+     * @access public
+     * @return array
+     */
+    public function processProjectActions(array $actions): array
+    {
+        /* 定义行动映射表。 */
+        /* Define the action map table. */
+        $map = array();
+        $map['testtask']['opened']  = 'testtaskopened';
+        $map['testtask']['started'] = 'testtaskstarted';
+        $map['testtask']['closed']  = 'testtaskclosed';
+        $map['build']['opened']     = 'buildopened';
+
+        /* 处理action数据。 */
+        /* Process actions data. */
+        foreach($actions as $key => $action)
+        {
+            if($action->objectType != 'project' && !isset($map[$action->objectType][$action->action])) unset($actions[$key]);
+            if(isset($map[$action->objectType][$action->action])) $action->action = $map[$action->objectType][$action->action];
+        }
+
+        return $actions;
+    }
+
+    /**
+     * 获取一条操作记录。
+     * Get an action record.
+     *
+     * @param  int         $actionID
+     * @access public
+     * @return object|bool
+     */
+    public function getById(int $actionID): object|bool
+    {
+        $action = $this->actionTao->fetchBaseInfo($actionID);
+        if(!$action) return false;
+
+        /* 当action值为repocreated的时候拼接域名。 */
+        /* Splice domain name for connection when the action is equal to 'repocreated'.*/
+        if($action->action == 'repocreated') $action->extra = str_replace("href='", "href='" . common::getSysURL(), $action->extra);
+
+        return $action;
+    }
+
+    /**
+     * 获取用户第一条操作。
+     * Get user first action.
+     *
+     * @param  string $account
+     * @access public
+     * @return object
+     */
+    public function getAccountFirstAction(string $account): object|false
+    {
+        return $this->dao->select('*')->from(TABLE_ACTION)->where('actor')->eq($account)->orderBy('id')->limit(1)->fetch();
+    }
+
+    /**
+     * 获取已删除的对象。
+     * Get deleted objects.
+     *
+     * @param  string $objectType
+     * @param  string $type      all|hidden
+     * @param  string $orderBy
+     * @param  object $pager
+     * @access public
+     * @return array
+     */
+    public function getTrashes(string $objectType, string $type, string $orderBy, ?object $pager = null): array
+    {
+        $noMultipleExecutions = $this->dao->select('id')->from(TABLE_EXECUTION)->where('multiple')->eq('0')->andWhere('type')->in('sprint,kanban')->fetchPairs();
+
+        $extra   = $type == 'hidden' ? self::BE_HIDDEN : self::CAN_UNDELETED;
+        $trashes = $this->dao->select('*')->from(TABLE_ACTION)
+            ->where('action')->eq('deleted')
+            ->beginIF($objectType != 'all')->andWhere('objectType')->eq($objectType)->fi()
+            ->beginIF($objectType == 'execution')->andWhere('objectID')->notIn($noMultipleExecutions)->fi()
+            ->beginIF($objectType == 'all')
+            ->andWhere('objectType', true)->ne('execution')
+            ->orWhere('(objectType')->eq('execution')->andWhere('objectID')->notIn($noMultipleExecutions)
+            ->markRight(2)
+            ->fi()
+            ->andWhere('objectType')->notIn($this->config->action->hiddenTrashObjects)
+            ->andWhere('extra')->eq($extra)
+            ->andWhere('vision')->eq($this->config->vision)
+            ->orderBy($orderBy)
+            ->page($pager)
+            ->fetchAll('', false);
+        if(empty($trashes)) return array();
+
+        /* 按对象类型对已删除的对象进行分组，并获取名称字段。 */
+        /* Group trashes by objectType, and get there name field. */
+        $auditplanIdList = array();
+        foreach($trashes as $object)
+        {
+            $object->objectType = str_replace('`', '', $object->objectType);
+            if($object->objectType == 'auditplan') $auditplanIdList[$object->objectID] = $object->objectID;
+            $typeTrashes[$object->objectType][] = $object->objectID;
+        }
+
+        $auditplanList = $this->dao->select('id,objectID,objectType')->from(TABLE_AUDITPLAN)->where('id')->in($auditplanIdList)->fetchAll('id');
+        foreach($auditplanList as $auditplan) $typeTrashes[$auditplan->objectType][] = $auditplan->objectID;
+
+        foreach($typeTrashes as $objectType => $objectIdList)
+        {
+            if(!isset($this->config->objectTables[$objectType])) continue;
+            if($objectType == 'auditplan') continue;
+            if(!isset($this->config->action->objectNameFields[$objectType])) continue;
+
+            $table        = $this->config->objectTables[$objectType];
+            $field        = $this->config->action->objectNameFields[$objectType];
+            $objectIdList = array_unique($objectIdList);
+            if($objectType == 'pipeline')
+            {
+                $objectNames['jenkins'] = $this->dao->select("id, {$field} AS name")->from($table)->where('id')->in($objectIdList)->andWhere('type')->eq('jenkins')->fetchPairs();
+                $objectNames['gitlab']  = $this->dao->select("id, {$field} AS name")->from($table)->where('id')->in($objectIdList)->andWhere('type')->eq('gitlab')->fetchPairs();
+            }
+            elseif($objectType == 'pivot')
+            {
+                $objectNames[$objectType] = $this->dao->select("t1.id, t2.{$field} AS name")->from($table)->alias('t1')
+                    ->leftJoin(TABLE_PIVOTSPEC)->alias('t2')->on('t1.id = t2.pivot and t1.version = t2.version')
+                    ->where('t1.id')->in($objectIdList)
+                    ->fetchPairs();
+            }
+            elseif($objectType == 'stakeholder')
+            {
+                $objectNames[$objectType] = $this->dao->select("t1.id, t2.realname AS name")->from($table)->alias('t1')
+                    ->leftJoin(TABLE_USER)->alias('t2')->on('t1.user = t2.account')
+                    ->where('t1.id')->in($objectIdList)
+                    ->fetchPairs();
+            }
+            else
+            {
+                $objectNames[$objectType] = $this->dao->select("id, {$field} AS name")->from($table)->where('id')->in($objectIdList)->filterTpl('skip')->fetchPairs();
+            }
+        }
+
+        /* 将对象名称字段添加到回收站数据中。 */
+        /* Add name field to the trashes. */
+        foreach($trashes as $key => $trash)
+        {
+            if($trash->objectType == 'pipeline' && isset($objectNames['gitlab'][$trash->objectID]))  $trash->objectType = 'gitlab';
+            if($trash->objectType == 'pipeline' && isset($objectNames['jenkins'][$trash->objectID])) $trash->objectType = 'jenkins';
+
+            if($trash->objectType == 'auditplan')
+            {
+                $realObjectID      = isset($auditplanList[$trash->objectID]) ? $auditplanList[$trash->objectID]->objectID   : 0;
+                $realObjectType    = isset($auditplanList[$trash->objectID]) ? $auditplanList[$trash->objectID]->objectType : '';
+                $trash->objectName = isset($objectNames[$realObjectType][$realObjectID]) ? $objectNames[$realObjectType][$realObjectID] : '';
+            }
+            else
+            {
+                $trash->objectName = isset($objectNames[$trash->objectType][$trash->objectID]) ? $objectNames[$trash->objectType][$trash->objectID] : '';
+            }
+        }
+        return $trashes;
+    }
+
+    /**
+     * 通过查询获取回收站内的对象。
+     * Get deleted objects by search.
+     *
+     * @param  string     $objectType
+     * @param  string     $type       all|hidden
+     * @param  string|int $queryID
+     * @param  string     $orderBy
+     * @param  object     $pager
+     * @access public
+     * @return array
+     */
+    public function getTrashesBySearch(string $objectType, string $type, string|int $queryID, string $orderBy, ?object $pager = null): array
+    {
+        if($objectType == 'all') return array();
+        if($queryID && $queryID != 'myQueryID')
+        {
+            $query = $this->loadModel('search')->getQuery($queryID);
+            if($query)
+            {
+                $this->session->set('trashQuery', $query->sql);
+                $this->session->set('trashForm', $query->form);
+            }
+            else
+            {
+                $this->session->set('trashQuery', ' 1 = 1');
+            }
+        }
+        else
+        {
+            if($this->session->trashQuery === false) $this->session->set('trashQuery', ' 1 = 1');
+        }
+
+        $extra      = $type == 'hidden' ? self::BE_HIDDEN : self::CAN_UNDELETED;
+        $table      = $this->config->objectTables[$objectType];
+        $nameField  = isset($this->config->action->objectNameFields[$objectType]) ? 't2.' . '`' . $this->config->action->objectNameFields[$objectType] . '`' : '';
+        $trashQuery = $this->session->trashQuery;
+        $trashQuery = str_replace(array('`objectID`', '`actor`', '`date`'), array('t1.`objectID`', 't1.`actor`', 't1.`date`'), $trashQuery);
+        if($nameField) $trashQuery = preg_replace("/`objectName`/", $nameField, $trashQuery);
+        $queryFields = $objectType != 'pipeline' ? "t1.*, {$nameField} AS objectName" : 't1.*, t1.objectType AS type, t2.name AS objectName, t2.type AS objectType';
+
+        $trashes = $this->dao->select($queryFields)->from(TABLE_ACTION)->alias('t1')
+            ->leftJoin($table)->alias('t2')->on('t1.objectID=t2.id')
+            ->where('t1.action')->eq('deleted')
+            ->andWhere($trashQuery)
+            ->andWhere('t1.extra')->eq($extra)
+            ->andWhere('t1.vision')->eq($this->config->vision)
+            ->andWhere('objectType')->notIn($this->config->action->hiddenTrashObjects)
+            ->beginIF($objectType != 'pipeline' && $objectType != 'all')->andWhere('t1.objectType')->eq($objectType)->fi()
+
+            ->beginIF($objectType == 'pipeline')
+            ->andWhere('(t2.type')->eq('gitlab')
+            ->orWhere('t2.type')->eq('jenkins')
+            ->markRight(1)
+            ->fi()
+
+            ->orderBy($orderBy)
+            ->page($pager)
+            ->fetchAll('objectID');
+
+        return $trashes;
+    }
+
+    /**
+     * 获取回收站的对象类型列表。
+     * Get object type list of trashes.
+     *
+     * @param  string $type
+     * @access public
+     * @return array
+     */
+    public function getTrashObjectTypes(string $type): array
+    {
+        $extra                = $type == 'hidden' ? self::BE_HIDDEN : self::CAN_UNDELETED;
+        $noMultipleExecutions = $this->dao->select('id')->from(TABLE_EXECUTION)->where('multiple')->eq('0')->andWhere('type')->in('sprint,kanban')->fetchPairs();
+        return $this->dao->select('objectType')->from(TABLE_ACTION)
+            ->where('action')->eq('deleted')
+            ->andWhere('extra')->eq($extra)
+            ->andWhere('objectType', true)->ne('execution')
+            ->orWhere('(objectType')->eq('execution')->andWhere('objectID')->notIn($noMultipleExecutions)
+            ->markRight(2)
+            ->andWhere('vision')->eq($this->config->vision)
+            ->andWhere('objectType')->notIn($this->config->action->hiddenTrashObjects)
+            ->fetchAll('objectType');
+    }
+
+    /**
+     * 获取一个操作的历史记录。
+     * Get histories of an action.
+     *
+     * @param  array|int  $actionID
+     * @access public
+     * @return array
+     */
+    public function getHistory(array|int $actionID): array
+    {
+        return $this->dao->select('*')->from(TABLE_HISTORY)->where('action')->in($actionID)->fetchGroup('action');
+    }
+
+    /**
+     * 记录操作的历史记录。
+     * Log histories for an action.
+     *
+     * @param  int    $actionID
+     * @param  array  $changes
+     * @access public
+     * @return bool
+     */
+    public function logHistory(int $actionID, array $changes): bool
+    {
+        if(empty($actionID) || empty($changes)) return false;
+        foreach($changes as $change)
+        {
+            $change = is_array($change) ? json_decode(json_encode($change)) : $change;
+            $change->action = $actionID;
+
+            $change = $this->processHistory($change);
+            $this->dao->insert(TABLE_HISTORY)->data($change)->exec();
+            if(dao::isError()) return false;
+        }
+        return true;
+    }
+
+    /**
+     * 打印一个对象的所有操作记录。
+     * Print actions of an object.
+     *
+     * @param  object $action
+     * @param  string $desc
+     * @access public
+     * @return void
+     */
+    public function renderAction(object $action, string|array $desc = '')
+    {
+        if(!isset($action->objectType) || !isset($action->action)) return false;
+
+        $objectType = $action->objectType;
+        $actionType = strtolower($action->action);
+
+        /**
+         *
+         * 设置操作的描述。
+         *
+         * 1. 如果模块中定义了操作的描述，使用模块中定义的。
+         * 2. 如果模块中没有定义，使用公共的操作描述。
+         * 3. 如果公共的操作描述中没有定义，使用默认的操作描述。
+         *
+         * Set the desc string of this action.
+         *
+         * 1. If the module of this action has defined desc of this actionType, use it.
+         * 2. If no defined in the module language, search the common action define.
+         * 3. If not found in the lang->action->desc, use the $lang->action->desc->common or $lang->action->desc->extra as the default.
+         */
+        $this->app->loadLang($objectType == 'module' ? 'tree' : $objectType);
+        if(empty($desc))
+        {
+            if(($action->objectType == 'story' or $action->objectType == 'demand') && $action->action == 'reviewed' && strpos($action->extra, ',') !== false)
+            {
+                $desc = $this->lang->{$objectType}->action->rejectreviewed;
+            }
+            elseif($action->objectType == 'productplan' && in_array($action->action, array('startedbychild','finishedbychild','closedbychild','activatedbychild', 'createchild')))
+            {
+                $desc = $this->lang->{$objectType}->action->changebychild;
+            }
+            elseif($action->objectType == 'module' && in_array($action->action, array('created', 'moved', 'deleted')))
+            {
+                $desc = $this->lang->{$objectType}->action->{$action->action};
+            }
+            elseif(strpos('createmr,editmr,removemr', $action->action) !== false && strpos($action->extra, '::') !== false)
+            {
+                $mrAction = str_replace('mr', '', $action->action) . 'Action';
+                list($mrDate, $mrActor, $mrLink) = explode('::', $action->extra);
+                if(!$mrActor) $mrActor = $action->actor;
+                if(is_numeric($mrLink)) $mrLink = helper::createLink('mr', 'view', "mrID={$mrLink}");
+
+                if(isInModal()) $mrLink .= ($this->config->requestType == 'GET' ? '&onlybody=yes' : '?onlybody=yes');
+
+                $this->app->loadLang('mr');
+                $desc = sprintf($this->lang->mr->{$mrAction}, $mrDate, $mrActor, $mrLink);
+            }
+            elseif(in_array($this->config->edition, array('max', 'ipd')) && strpos($this->config->action->assetType, ",{$action->objectType},") !== false && $action->action == 'approved')
+            {
+                $desc = empty($this->lang->action->approve->{$action->extra}) ? '' : $this->lang->action->approve->{$action->extra};
+            }
+            elseif(isset($this->lang->{$objectType}) && isset($this->lang->{$objectType}->action->{$actionType}))
+            {
+                $desc = $this->lang->{$objectType}->action->{$actionType};
+            }
+            elseif(in_array($action->extra, array('autobyparent', 'autobychild')) && isset($this->lang->{$objectType}) && isset($this->lang->{$objectType}->action->{$action->extra . $actionType}))
+            {
+                $desc = $this->lang->{$objectType}->action->{$action->extra . $actionType};
+            }
+            elseif($action->objectType == 'instance' && isset($this->lang->action->desc->{$actionType}))
+            {
+                $desc  = $this->lang->action->desc->{$actionType};
+                $extra = json_decode($action->extra);
+                if(in_array($actionType, array('adjustmemory', 'adjustcpu', 'adjustvol')))
+                {
+                    $action->newValue = $action->comment;
+                    $action->comment  = '';
+                    if(!empty($action->history))
+                    {
+                        $itemHistory = current($action->history);
+                        $action->newValue = $itemHistory->new;
+                        $action->oldValue = $itemHistory->old;
+                        $desc  = $this->lang->action->desc->{$actionType . 'change'};
+                    }
+                }
+
+                if(!empty($extra))
+                {
+                    $action->extra = '';
+                    if(!empty($extra->data))
+                    {
+                        $action->oldName    = zget($extra->data, 'oldName', '');
+                        $action->newName    = zget($extra->data, 'newName', '');
+                        $action->oldVersion = zget($extra->data, 'oldVersion', '');
+                        $action->newVersion = zget($extra->data, 'newVersion', '');
+                        $action->oldAppName = zget($extra->data, 'oldAppName', '');
+                        $action->newAppName = zget($extra->data, 'newAppName', '');
+                    }
+
+                    if(!empty($extra->result->code) && $extra->result->code != 200 && !empty($extra->result->message)) $action->comment = $extra->result->message;
+                    if(is_string($extra->result) && $extra->result != 'fail' && isset($extra->message))
+                    {
+                        $action->comment = "\n" . $extra->message;
+                    }
+                }
+            }
+            elseif($action->action == 'run' && $action->objectType == 'case' && strpos($action->extra, ',') !== false)
+            {
+                list($testtaskID, $result) = explode(',', $action->extra);
+                if($result)
+                {
+                    $link     = '';
+                    $testtask = $this->dao->select('name')->from(TABLE_TESTTASK)->where('id')->eq($testtaskID)->fetch();
+                    if($testtask) $link = common::hasPriv('testtask', 'cases') ? html::a(helper::createLink('testtask', 'cases', "testtaskID=$testtaskID"), ' ' . $testtask->name) : ' ' . $testtask->name;
+                    if(!isset($this->lang->testcase->resultList)) $this->app->loadLang('testcase');
+                    $desc = sprintf($this->lang->action->desc->runresult, "<strong>{$link}</strong>", $result, zget($this->lang->testcase->resultList, $result));
+                }
+                else
+                {
+                    $desc = $this->lang->action->desc->run;
+                }
+            }
+            elseif(isset($this->lang->action->desc->{$actionType}))
+            {
+                $desc = $this->lang->action->desc->{$actionType};
+            }
+            else
+            {
+                $desc = $action->extra ? $this->lang->action->desc->extra : $this->lang->action->desc->common;
+            }
+        }
+
+        $action->date = substr($action->date, 0, 19);
+        if($this->app->getViewType() == 'mhtml') $action->date = date('m-d H:i', strtotime($action->date));
+
+        /* 遍历actions, 替换变量。 */
+        /* Cycle actions, replace vars. */
+        foreach($action as $key => $value)
+        {
+            if($key == 'history') continue;
+
+            /* 如果desc是数组，替换变量。 */
+            /* Desc can be an array or string. */
+            if(is_array($desc))
+            {
+                if($key == 'extra') continue;
+                if($action->objectType == 'story' && $action->action == 'reviewed' && strpos($action->extra, '|') !== false && $key == 'actor')
+                {
+                    $desc['main'] = str_replace('$actor', $this->lang->action->superReviewer . ' ' . $value, $desc['main']);
+                }
+                elseif(!is_array($value))
+                {
+                    $desc['main'] = str_replace('$' . $key, (string)$value, $desc['main']);
+                }
+            }
+            else
+            {
+                if(in_array($actionType, array('restoredsnapshot', 'createdsnapshot')) && in_array($action->objectType, array('vm', 'zanode')) && $value == 'defaultSnap') $value = $this->lang->{$objectType}->snapshot->defaultSnapName;
+
+                if(!is_array($value) && !is_object($value)) $desc = str_replace('$' . $key, (string)$value, $desc);
+            }
+        }
+
+        /* 如果desc是数组，处理extra。 */
+        /* If the desc is an array, process extra. Please bug/lang. */
+        if(!is_array($desc)) return $desc;
+
+        $extra = strtolower($action->extra);
+
+        /* Fix bug #741. */
+        if(isset($desc['extra']))
+        {
+            if($objectType == 'story')
+            {
+                $story = $this->fetchByID($action->objectID, $objectType);
+                if($story->type != 'story') $this->app->loadLang($story->type);
+                $desc['extra'] = $this->lang->{$story->type}->{$desc['extra']};
+            }
+            else
+            {
+                $desc['extra'] = $this->lang->{$objectType}->{$desc['extra']};
+            }
+        }
+
+        $actionDesc = '';
+        if(isset($desc['extra'][$extra]))
+        {
+            $actionDesc = str_replace('$extra', $desc['extra'][$extra], $desc['main']);
+        }
+        else
+        {
+            $actionDesc = str_replace('$extra', $action->extra, $desc['main']);
+        }
+
+        if(($action->objectType == 'story' or $action->objectType == 'demand') && $action->action == 'reviewed')
+        {
+            if(strpos($action->extra, ',') !== false)
+            {
+                list($extra, $reason) = explode(',', $extra);
+                $desc['reason'] = $this->lang->{$objectType}->{$desc['reason']};
+                $actionDesc = str_replace(array('$extra', '$reason'), array($desc['extra'][$extra], $desc['reason'][$reason]), $desc['main']);
+            }
+
+            if(strpos($action->extra, '|') !== false)
+            {
+                list($extra, $isSuperReviewer) = explode('|', $extra);
+                $actionDesc = str_replace('$extra', $desc['extra'][$extra], $desc['main']);
+            }
+        }
+
+        if($action->objectType == 'story' && $action->action == 'synctwins')
+        {
+            if(!empty($extra) && strpos($extra, '|') !== false)
+            {
+                list($operate, $storyID) = explode('|', $extra);
+                $desc['operate'] = $this->lang->{$objectType}->{$desc['operate']};
+                $link = common::hasPriv('story', 'view') ? html::a(helper::createLink('story', 'view', "storyID=$storyID"), "#$storyID ") : "#$storyID";
+                $actionDesc = str_replace(array('$extra', '$operate'), array($link, $desc['operate'][$operate]), $desc['main']);
+            }
+        }
+
+        $isCloseStory = $action->objectType == 'story' && $action->action == 'closed';
+        if($isCloseStory && !empty($extra) && strpos($extra, '|') !== false)
+        {
+            list($extra) = explode('|', $extra);
+            if(!empty($desc['extra'][$extra])) $actionDesc = str_replace('$extra', $desc['extra'][$extra], $desc['main']);
+        }
+        if(($action->objectType == 'story' || $action->objectType == 'demand') && $action->action == 'fromboard')
+        {
+            $actionExtra = html::a(helper::createLink('board', 'view', "canvasID={$action->extra}"), $action->extra);
+            $actionDesc = str_replace('$extra', $actionExtra, $desc['main']);
+        }
+
+        if($action->objectType == 'module' && strpos(',created,moved,', $action->action) !== false)
+        {
+            $moduleNames = $this->loadModel('tree')->getOptionMenu($action->objectID, 'story', 0, 'all', '');
+            $modules     = explode(',', $action->extra);
+            $moduleNames = array_intersect_key($moduleNames, array_combine($modules, $modules));
+            $moduleNames = implode(', ', $moduleNames);
+            $actionDesc  = str_replace('$extra', $moduleNames, $desc['main']);
+        }
+        elseif($action->objectType == 'module' && $action->action == 'deleted')
+        {
+            $module      = $this->dao->select('*')->from(TABLE_MODULE)->where('id')->eq($action->objectID)->fetch();
+            $moduleNames = $this->loadModel('tree')->getOptionMenu($module->root, 'story', 0, 'all', '');
+            $actionDesc  = str_replace('$extra', (string)zget($moduleNames, $action->objectID), $desc['main']);
+        }
+
+        if($action->objectType == 'board' && in_array($action->action, array('importstory', 'importdemand', 'importrequirement', 'importepic', 'convertdemand', 'convertepic', 'convertrequirement', 'convertstory')))
+        {
+            if($action->action == 'importstory' || $action->action == 'convertstory')
+            {
+                $story = $this->loadModel('story')->fetchById((int)$action->extra);
+                $link  = helper::createLink('story', 'view', "storyID={$action->extra}");
+            }
+            if($action->action == 'convertrequirement' || $action->action == 'importrequirement')
+            {
+                $story = $this->loadModel('story')->fetchById((int)$action->extra);
+                $link  = helper::createLink('requirement', 'view', "storyID={$action->extra}");
+            }
+            if($action->action == 'importdemand' || $action->action == 'convertdemand')
+            {
+                $story = $this->loadModel('demand')->fetchByID((int)$action->extra);
+                $link  = helper::createLink('demand', 'view', "demandID={$action->extra}");
+            }
+            if($action->action == 'importepic' || $action->action == 'convertepic')
+            {
+                $story = $this->loadModel('story')->fetchByID((int)$action->extra);
+                $link  = helper::createLink('epic', 'view', "epicID={$action->extra}");
+            }
+
+            $link      .= $this->config->requestType == 'GET' ? '&onlybody=yes' : '?onlybody=yes';
+            $replace    = $story ? html::a('', "#$action->extra {$story->title}", '', "class='story-link' data-href='$link'") : '';
+            $actionDesc = str_replace('$extra', $replace, $desc['main']);
+        }
+        return $actionDesc;
+    }
+
+    /**
+     * 格式化操作备注。
+     * Format action comment.
+     *
+     * @param string $comment
+     * @access public
+     * @return string
+     */
+    public function formatActionComment(string $comment): string
+    {
+        if(str_contains($comment, '<pre class="prettyprint lang-html">'))
+        {
+            $before   = explode('<pre class="prettyprint lang-html">', $comment);
+            $after    = explode('</pre>', $before[1]);
+            $htmlCode = $after[0];
+            return $before[0] . htmlspecialchars($htmlCode) . $after[1];
+        }
+
+        return strip_tags($comment) === $comment
+            ? nl2br($comment)
+            : $comment;
+    }
+
+    /**
+     * 构建操作记录列表，便于前端组件进行渲染。
+     * Build action list for render by frontend component.
+     *
+     * @param array $actions
+     * @param array $users
+     * @param bool  $commentEditable
+     * @access public
+     * @return array
+     */
+    public function buildActionList(array $actions, ?array $users = null, bool $commentEditable = true): array
+    {
+        if(empty($users)) $users = $this->loadModel('user')->getPairs('noletter');
+
+        $list      = array();
+        $endAction = end($actions);
+        $account   = $this->app->user->account;
+        foreach($actions as $action)
+        {
+            $item = new stdClass();
+            if(strlen(trim(($action->comment))) !== 0)
+            {
+                $item->comment         = $this->formatActionComment($action->comment);
+                $currentUserCanEdit    = $action->id == $endAction->id && $action->actor == $account && $action->action == 'commented';
+                $item->commentEditable = $commentEditable && common::hasPriv('action', 'editComment') && $currentUserCanEdit;
+            }
+
+            if($action->action === 'assigned' || $action->action === 'toaudit')
+            {
+                $action->extra = zget($users, $action->extra);
+                if(str_contains($action->extra, ':')) $action->extra = substr($action->extra, strpos($action->extra, ':') + 1);
+            }
+
+            if(!isset($action->rawActor)) $action->rawActor = $action->actor;
+            $action->actor = zget($users, $action->actor);
+            if(str_contains($action->actor, ':')) $action->actor = substr($action->actor, strpos($action->actor, ':') + 1);
+
+            if(!empty($action->history)) $item->historyChanges = $this->renderChanges($action->objectType, $action->objectID, $action->history);
+
+            $item->id          = $action->id;
+            $item->action      = $action->action;
+            $item->hasRendered = true;
+            $item->content     = $this->renderAction($action);
+            if(!empty($action->files)) $item->files = array_values($action->files);
+
+            if(strlen(trim(($action->comment))) !== 0)
+            {
+                $isCurrentUserCreated  = $action->rawActor == $account;
+                $item->comment         = $this->formatActionComment($action->comment);
+                $item->commentEditable = $commentEditable && $endAction->id == $action->id && $isCurrentUserCreated && common::hasPriv('action', 'editComment');
+            }
+
+            if($action->objectType == 'instance' && in_array($action->action, array('adjustmemory', 'adjustcpu', 'adjustvol'))) unset($item->comment);
+
+            $list[] = $item;
+        }
+        return $list;
+    }
+
+    /**
+     * 打印一个对象的所有操作记录。
+     * Print actions of an object.
+     *
+     * @param  object    $action
+     * @param  string   $desc
+     * @access public
+     * @return void
+     */
+    public function printAction(object $action, string|array $desc = '')
+    {
+        $content = $this->renderAction($action, $desc);
+        if(is_string($content)) echo $content;
+        return;
+    }
+
+    /**
+     * 获取动态。
+     * Get actions as dynamic.
+     *
+     * @param  string     $account
+     * @param  string     $period
+     * @param  string     $orderBy
+     * @param  int        $limit
+     * @param  string|int $productID   all|int(like 123)|notzero   all => include zero, notzero, greater than 0
+     * @param  string|int $projectID   same as productID
+     * @param  string|int $executionID same as productID
+     * @param  string     $date
+     * @param  string     $direction
+     * @access public
+     * @return array
+     */
+    public function getDynamic(string $account = 'all', string $period = 'all', string $orderBy = 'date_desc', int $limit = 50, string|int $productID = 'all', string|int $projectID = 'all', string|int $executionID = 'all', string $date = '', string $direction = 'next'): array
+    {
+        /* 计算时间段的开始和结束时间。 */
+        /* Computer the begin and end date of a period. */
+        $beginAndEnd = $this->computeBeginAndEnd($period, $date, $direction);
+
+        $actionCondition = $this->getActionCondition();
+        if(!$actionCondition && !$this->app->user->admin && isset($this->app->user->rights['acls']['actions']))
+        {
+            $this->session->set('actionQueryCondition', null,  $this->app->tab);
+            return array();
+        }
+
+        /* 构建权限搜索条件。 */
+        /* Build has priv search condition. */
+        $condition = "`objectType` != 'effort'";
+
+        $noMultipleExecutions = $this->dao->select('id')->from(TABLE_PROJECT)->where('multiple')->eq(0)->andWhere('type')->in('sprint,kanban')->fetchPairs();
+        if($noMultipleExecutions) $condition = "({$condition}) AND (`objectType` != 'execution' OR (`objectType` = 'execution' AND `objectID`" . (count($noMultipleExecutions) == 1 ? ' != ' . reset($noMultipleExecutions) : ' NOT ' . helper::dbIN($noMultipleExecutions)) . "))";
+
+        $actions = $this->actionTao->getActionListByCondition("({$condition})", $beginAndEnd['begin'], $beginAndEnd['end'], $account, $productID, $projectID, $executionID, $actionCondition, $orderBy, $limit);
+        if(!$actions) return array();
+
+        $this->loadModel('common')->saveQueryCondition($this->dao->get(), 'action');
+
+        return $this->transformActions($actions);
+    }
+
+    /**
+     * 通过产品获取动态。
+     * Get actions as dynamic by product.
+     *
+     * @param  int    $productID
+     * @param  string $account
+     * @param  string $period
+     * @param  string $orderBy
+     * @param  int    $limit
+     * @param  string $date
+     * @param  string $direction
+     * @access public
+     * @return array
+     */
+    public function getDynamicByProduct(int $productID, string $account = 'all', string $period = 'all', string $orderBy = 'date_desc', int $limit = 50, string $date = '', string $direction = 'next'): array
+    {
+        return $this->getDynamic($account, $period, $orderBy, $limit, (int)$productID, 'all', 'all', $date, $direction);
+    }
+
+    /**
+     * 通过项目获取动态。
+     * Get actions as dynamic by project.
+     *
+     * @param  int    $projectID
+     * @param  string $account
+     * @param  string $period
+     * @param  string $orderBy
+     * @param  int    $limit
+     * @param  string $date
+     * @param  string $direction
+     * @access public
+     * @return array
+     */
+    public function getDynamicByProject(int $projectID, string $account = 'all', string $period = 'all', string $orderBy = 'date_desc', int $limit = 50, string $date = '', string $direction = 'next'): array
+    {
+        return $this->getDynamic($account, $period, $orderBy, $limit, 'all', (int)$projectID, 'all', $date, $direction);
+    }
+
+    /**
+     * 通过执行获取动态。
+     * Get actions as dynamic by execution.
+     *
+     * @param  int    $executionID
+     * @param  string $account
+     * @param  string $period
+     * @param  string $orderBy
+     * @param  int    $limit
+     * @param  string $date
+     * @param  string $direction
+     * @access public
+     * @return array
+     */
+    public function getDynamicByExecution(int $executionID, string $account = 'all', string $period = 'all', string $orderBy = 'date_desc', int $limit = 50, string $date = '', string $direction = 'next'): array
+    {
+        return $this->getDynamic($account, $period, $orderBy, $limit, 'all', 'all', (int)$executionID, $date, $direction);
+    }
+
+    /**
+     * 通过账户获取动态。
+     * Get actions as dynamic by account.
+     *
+     * @param  string     $account
+     * @param  string     $period
+     * @param  string     $orderBy
+     * @param  int        $limit
+     * @param  string     $date
+     * @param  string     $direction
+     * @access public
+     * @return array
+     */
+    public function getDynamicByAccount(string $account = '', string $period = 'all', string $orderBy = 'date_desc', int $limit = 50, string $date = '', string $direction = 'next'): array
+    {
+        if(empty($account)) $account = $this->app->user->account;
+        return $this->getDynamic($account, $period, $orderBy, $limit, 'all', 'all', 'all', $date, $direction);
+    }
+
+    /**
+     * 通过视野获取用户可访问的动态类型。
+     * Get the action types that the user can access through the vision.
+     *
+     * @param  string $module
+     * @access public
+     * @return string
+     */
+    public function getActionCondition($module = ''): string
+    {
+        if($this->app->user->admin) return '';
+
+        $actionCondition = array();
+        if(isset($this->app->user->rights['acls']['actions']))
+        {
+            if(empty($this->app->user->rights['acls']['actions'])) return '1 != 1';
+            if($module && !isset($this->app->user->rights['acls']['actions'][$module])) return '1 != 1';
+            foreach($this->app->user->rights['acls']['actions'] as $moduleName => $actions)
+            {
+                if($module && $module != $moduleName) continue;
+                if(isset($this->lang->mainNav->{$moduleName}) && !empty($this->app->user->rights['acls']['views']) && !isset($this->app->user->rights['acls']['views'][$moduleName])) continue;
+                $actionCondition[] = "(`objectType` = '{$moduleName}' AND `action` " . helper::dbIN(array_keys($actions)) . ")";
+            }
+        }
+        return implode(' OR ', $actionCondition);
+    }
+
+    /**
+     * 搜索获取动态。
+     * Get dynamic by search.
+     *
+     * @param  int    $queryID
+     * @param  string $orderBy
+     * @param  int    $limit
+     * @param  string $date
+     * @param  string $direction
+     * @access public
+     * @return array
+     */
+    public function getDynamicBySearch(int $queryID, string $orderBy = 'date_desc', int $limit = 50, string $date = '', string $direction = 'next'): array
+    {
+        $query = $queryID ? $this->loadModel('search')->getQuery($queryID) : '';
+
+        /* 获取sql和表单内容。 */
+        /* Get sql and form content. */
+        if($query)
+        {
+            $this->session->set('actionQuery', $query->sql);
+            $this->session->set('actionForm', $query->form);
+        }
+        if($this->session->actionQuery == false) $this->session->set('actionQuery', ' 1 = 1');
+
+        $allProducts   = "`product` = 'all'";
+        $allProjects   = "`project` = 'all'";
+        $allExecutions = "`execution` = 'all'";
+        $actionQuery   = $this->session->actionQuery;
+        $productID     = 0;
+        if(preg_match("/`product` = '(\d*)'/", $actionQuery, $out)) $productID = $out[1];
+
+        /* 如果查询条件中包含所有产品的查询条件，不限制产品。 */
+        /* If the query condition include all products, no limit product. */
+        if(strpos($actionQuery, $allProducts) !== false) $actionQuery = str_replace($allProducts, '1 = 1', $actionQuery);
+        /* 如果查询条件中包含所有项目的查询条件，不限制项目。 */
+        /* If the query condition include all projects, no limit project. */
+        if(strpos($actionQuery, $allProjects) !== false) $actionQuery = str_replace($allProjects, '1 = 1', $actionQuery);
+        /* 如果查询条件中包含所有执行的查询条件，不限制执行。 */
+        /* If the query condition include all executions, no limit execution. */
+        if(strpos($actionQuery, $allExecutions) !== false) $actionQuery = str_replace($allExecutions, '1 = 1', $actionQuery);
+
+        if($productID) $actionQuery = str_replace(" `product` = '{$productID}'", " t2.`product` = '{$productID}'", $actionQuery);
+        if($date) $actionQuery = "({$actionQuery}) AND " . ('date' . ($direction == 'next' ? '<' : '>') . "'{$date}'");
+
+        /* 如果当前版本为lite，则过滤掉产品相关的动态。 */
+        /* If this vision is lite, delete product actions. */
+        if($this->config->vision == 'lite') $actionQuery .= " AND objectType != 'product'";
+
+        $actionQuery .= " AND vision = '{$this->config->vision}'";
+        $actions      = $this->getBySQL($actionQuery, $orderBy, $limit);
+
+        $this->loadModel('common')->saveQueryCondition($this->dao->get(), 'action');
+        return $actions ? $this->transformActions($actions) : array();
+    }
+
+    /**
+     * 通过sql获取actions。
+     * Get actions by SQL.
+     *
+     * @param  string $sql
+     * @param  string $orderBy
+     * @param  int    $limit
+     * @access public
+     * @return array
+     */
+    public function getBySQL(string $sql, string $orderBy, int $limit = 50): array
+    {
+        $actionCondition = $this->getActionCondition();
+        $actionCondition = str_replace(' `action`', ' action.`action`', $actionCondition);
+        $hasProduct      = preg_match('/t2\.([`"]?)product/', $sql);
+
+        /* 构建权限搜索条件。 */
+        /* Build has priv search condition. */
+        $condition = "`objectType` != 'effort'";
+
+        $noMultipleExecutions = $this->dao->select('id')->from(TABLE_PROJECT)->where('multiple')->eq(0)->andWhere('type')->in('sprint,kanban')->fetchPairs();
+        if($noMultipleExecutions) $condition = "({$condition}) AND (`objectType` != 'execution' OR (`objectType` = 'execution' AND `objectID`" . (count($noMultipleExecutions) == 1 ? ' != ' . reset($noMultipleExecutions) : ' NOT ' . helper::dbIN($noMultipleExecutions)) . "))";
+
+        return $this->dao->select('action.*')->from(TABLE_ACTION)->alias('action')
+            ->beginIF($hasProduct)->leftJoin(TABLE_ACTIONPRODUCT)->alias('t2')->on('action.id=t2.action')->fi()
+            ->where('objectType')->notIN($this->config->action->ignoreObjectType4Dynamic)
+            ->andWhere('action.action')->notIN($this->config->action->ignoreActions4Dynamic)
+            ->andWhere("({$sql})")
+            ->andWhere("({$condition})")
+            ->beginIF(!empty($actionCondition))->andWhere("($actionCondition)")->fi()
+            ->orderBy($orderBy)
+            ->limit($limit)
+            ->fetchAll('id', false);
+    }
+
+    /**
+     * 转换动态用于显示。
+     * Transform the actions for display.
+     *
+     * @param  array  $actions
+     * @access public
+     * @return array
+     */
+    public function transformActions(array $actions): array
+    {
+        /* 获取评论用户以及当前登陆用户的本部门用户。 */
+        /* Get the commenters and the users of the current user's department. */
+        $commiters = $this->loadModel('user')->getCommiters();
+        $deptUsers = isset($this->app->user->dept) ? $this->loadModel('dept')->getDeptUserPairs((int)$this->app->user->dept, 'id') : '';
+
+        /* 通过action获取对象名称，所属项目以及需求。 */
+        /* Get object names, object projects and requirements by actions. */
+        list($objectNames, $relatedProjects, $requirements, $epics) = $this->getRelatedDataByActions($actions);
+
+        $projectGroups = array();
+        foreach($relatedProjects as $objectType => $idList) $projectGroups = array_merge($projectGroups, $idList);
+
+        /* If idList include ',*,' Format ',*,' to '*'. */
+        $projectIdList = array();
+        foreach($projectGroups as $idList)
+        {
+            $idList = explode(',', (string)$idList);
+            foreach($idList as $id) $projectIdList[] = $id;
+        }
+        if($projectIdList) $projectIdList = array_unique($projectIdList);
+
+        if($projectIdList) $projects = $this->dao->select('id,name,isTpl')->from(TABLE_PROJECT)->where('project')->in($projectIdList)->andWhere('deleted')->eq('0')->fetchAll('id');
+
+        $docIdList    = array();
+        $apiIdList    = array();
+        $docLibIdList = array();
+        foreach($actions as $action)
+        {
+            if($action->objectType == 'doc' || $action->objectType == 'doctemplate') $docIdList[$action->objectID]    = $action->objectID;
+            if($action->objectType == 'doclib') $docLibIdList[$action->objectID] = $action->objectID;
+            if($action->objectType == 'api')    $apiIdList[$action->objectID]    = $action->objectID;
+        }
+
+        /* 获取需要验证的元素列表。 */
+        /* Get the list of elements that need to be verified. */
+        $shadowProducts   = $this->dao->select('id')->from(TABLE_PRODUCT)->where('shadow')->eq(1)->fetchPairs();
+        $projectMultiples = $this->dao->select('id,type,multiple')->from(TABLE_PROJECT)->where('id')->in($projectIdList)->fetchAll('id');
+
+        $docList    = array();
+        $apiList    = array();
+        $docLibList = array();
+        $this->loadModel('doc');
+        if($docIdList)
+        {
+            $docList = $this->dao->select("`id`,`addedBy`,`type`,`lib`,`acl`,`users`,`readUsers`,`groups`,`readGroups`,`status`,`path`,`deleted`")->from(TABLE_DOC)->where('id')->in($docIdList)->fetchAll('id');
+            $docList = $this->doc->batchCheckPrivDoc($docList);
+        }
+        if($docLibIdList)
+        {
+            $docLibList = $this->dao->select('*')->from(TABLE_DOCLIB)->where('id')->in($docLibIdList)->fetchAll('id');
+            foreach($docLibList as $docLib)
+            {
+                if(!$this->doc->checkPrivLib($docLib)) unset($docLibList[$docLib->id]);
+            }
+        }
+        if($apiIdList)
+        {
+            $apiList = $this->dao->select('*')->from(TABLE_DOCLIB)->where('id')->in($docLibIdList)->fetchAll('id');
+            foreach($apiList as $api)
+            {
+                if(!$this->doc->checkPrivLib($api)) unset($apiList[$api->id]);
+            }
+        }
+
+        foreach($actions as $i => $action)
+        {
+            /* 如果doc,api,doclib,product类型对应的对象不存在，则从actions中删除。*/
+            /* If the object corresponding to the doc, api, doclib, and product types does not exist, it will be deleted from actions. */
+            if(!$this->actionTao->checkIsActionLegal($action, $shadowProducts, $docList, $apiList, $docLibList))
+            {
+                unset($actions[$i]);
+                continue;
+            }
+
+            $actionType = strtolower($action->action);
+            $objectType = strtolower($action->objectType);
+            $projectID  = isset($relatedProjects[$action->objectType][$action->objectID]) ? $relatedProjects[$action->objectType][$action->objectID] : 0;
+
+            $this->loadModel($action->objectType);
+            $action->originalDate = $action->date;
+            $action->date         = date(DT_MONTHTIME2, strtotime($action->date));
+            $action->actionLabel  = isset($this->lang->{$objectType}->{$actionType}) ? $this->lang->{$objectType}->{$actionType} : $action->action;
+            $action->actionLabel  = isset($this->lang->action->label->{$actionType}) ? $this->lang->action->label->{$actionType} : $action->actionLabel;
+            $action->objectLabel  = $this->getObjectLabel($objectType, $action->objectID, $actionType, $requirements, $epics);
+            $action->major        = isset($this->config->action->majorList[$action->objectType]) && in_array($action->action, $this->config->action->majorList[$action->objectType]) ? 1 : 0;
+            if($actionType == 'svncommited' || $actionType == 'gitcommited') $action->actor = zget($commiters, $action->actor);
+
+            /* 设置对象的名称和链接。 */
+            /* Set object name and set object link. */
+            $this->actionTao->addObjectNameForAction($action, $objectNames, $objectType);
+            $this->setObjectLink($action, $deptUsers, $shadowProducts, zget($projectMultiples, $projectID, ''), $projectIdList);
+            if($action->objectType == 'project' && !empty($projects[$action->objectID]->isTpl))
+            {
+                $action->objectLabel = $this->lang->project->template;
+                $action->objectLink  = helper::createLink('project', 'execution', "status=undone&projectID={$action->objectID}");
+            }
+            elseif($action->objectType == 'project' && $action->action == 'managedeliverable')
+            {
+                $action->objectLink  = helper::createLink('project', 'deliverable', "projectID={$action->objectID}"); // 交付物链接
+            }
+            elseif($action->objectType == 'execution' && $action->action == 'managedeliverable')
+            {
+                $action->objectLink  = helper::createLink('execution', 'view', "executionID={$action->objectID}"); // 交付物链接
+            }
+        }
+        return $actions;
+    }
+
+    /**
+     * 通过actions获取关联的数据。
+     * Get related data by actions.
+     *
+     * @param  array  $actions
+     * @access public
+     * @return array
+     */
+    public function getRelatedDataByActions(array $actions): array
+    {
+        /* Init object type array. */
+        $objectTypes = array();
+        foreach($actions as $object) $objectTypes[$object->objectType][$object->objectID] = $object->objectID;
+
+        if(isset($objectTypes['todo']))   $this->app->loadLang('todo');
+        if(isset($objectTypes['branch'])) $this->app->loadLang('branch');
+        $users = isset($objectTypes['gapanalysis']) || isset($objectTypes['stakeholder']) ? $this->loadModel('user')->getPairs('noletter') : array();
+
+        $objectNames = $relatedProjects = $requirements = $epics = array();
+        foreach($objectTypes as $objectType => $objectIdList)
+        {
+            if(!isset($this->config->objectTables[$objectType]) && strpos(',makeup,pivot,', ",{$objectType},") === false) continue;    // If no defination for this type, omit it.
+
+            if(isset($this->config->objectTables[$objectType])) $table = $this->config->objectTables[$objectType];
+            if($objectType == 'makeup') $table = TABLE_OVERTIME;
+            if($objectType == 'pivot')  $table = TABLE_PIVOTSPEC;
+            if($objectType == 'auditplan') continue;
+            $field = zget($this->config->action->objectNameFields, $objectType, '');
+            if(empty($field)) continue;
+
+            /* Get object name, related projects, requirements. */
+            list($objectName, $relatedProject, $requirements, $epics) = $this->getObjectRelatedData($table, $objectType, $objectIdList, $field, $users, $requirements, $epics);
+            if($objectType == 'branch' && in_array(BRANCH_MAIN, $objectIdList)) $objectName[BRANCH_MAIN] = $this->lang->branch->main;
+
+            $objectNames[$objectType]     = $objectName;
+            $relatedProjects[$objectType] = $relatedProject;
+        }
+
+        $objectNames['user'][0] = 'guest';    // Add guest account.
+
+        return array($objectNames, $relatedProjects, $requirements, $epics);
+    }
+
+    /**
+     * 获取对象的标签。
+     * Get object label.
+     *
+     * @param  string $objectType
+     * @param  int    $objectID
+     * @param  string $actionType
+     * @param  array  $requirements
+     * @param  array  $epics
+     * @access public
+     * @return string
+     */
+    public function getObjectLabel(string $objectType, int $objectID, string $actionType, array $requirements, array $epics): string
+    {
+        $actionObjectLabel = $objectType;
+        if(isset($this->lang->action->label->{$objectType}))
+        {
+            $objectLabel = $this->lang->action->label->{$objectType};
+
+            /* 用户故事替换为需求。 */
+            /* Replace story to requirement. */
+            if(isset($requirements[$objectID]) && is_string($objectLabel)) $objectLabel = str_replace($this->lang->SRCommon, $this->lang->URCommon, $objectLabel);
+            if(isset($epics[$objectID])        && is_string($objectLabel)) $objectLabel = str_replace($this->lang->SRCommon, $this->lang->ERCommon, $objectLabel);
+
+            if(!is_array($objectLabel)) $actionObjectLabel = $objectLabel;
+            if(is_array($objectLabel) && isset($objectLabel[$actionType])) $actionObjectLabel = $objectLabel[$actionType];
+
+            if($objectType == 'module')
+            {
+                $moduleType = $this->dao->select('type')->from(TABLE_MODULE)->where('id')->eq($objectID)->fetch('type');
+                if($moduleType == 'doc')
+                {
+                    $this->app->loadLang('doc');
+                    $actionObjectLabel = $this->lang->doc->menuTitle;
+                }
+            }
+
+            if($objectType == 'system' && strpos(strtolower($actionType), 'backup') !== false) $actionObjectLabel = '';
+        }
+
+        if(in_array($this->config->edition, array('max', 'ipd')) && $objectType == 'assetlib')
+        {
+            $libType = $this->dao->select('type')->from(TABLE_ASSETLIB)->where('id')->eq($objectID)->fetch('type');
+            if(strpos('story,issue,risk,opportunity,practice,component', $libType) !== false) $actionObjectLabel = $this->lang->action->label->{$libType . 'assetlib'};
+        }
+
+        return $actionObjectLabel;
+    }
+
+    /**
+     * 检查Action是否设置链接。
+     * Check if action has link.
+     *
+     * @param  object $action
+     * @param  array  $projectIdList
+     * @access public
+     * @return bool
+     */
+    public function checkForSetLink(object $action, array $projectIdList = array()): bool
+    {
+        static $parents = array();
+        if(empty($parents) && !empty($projectIdList)) $parents = $this->dao->select('parent')->from(TABLE_PROJECT)->where('project')->in($projectIdList)->andWhere('deleted')->eq('0')->fetchPairs('parent', 'parent');
+
+        if($action->objectType == 'execution' && isset($parents[$action->objectID])) return false;
+        if($this->app->user->admin) return true;
+
+        if($action->execution && strpos(",{$this->app->user->view->sprints},", ",{$action->execution},") === false) return false;
+        if($action->project   && strpos(",{$this->app->user->view->projects},", ",{$action->project},") === false)  return false;
+
+        $hasPriv  = false;
+        $products = array();
+        if($action->product) $products = array_unique(array_filter(explode(',', $action->product)));
+        if($products)
+        {
+            foreach($products as $productID)
+            {
+                if(strpos(",{$this->app->user->view->products},", ",{$productID},") !== false) $hasPriv = true;
+            }
+            if(!$hasPriv) return false;
+        }
+
+        return true;
+    }
+
+    /**
+     * 设置action的objectLink属性。
+     * Set the objectLink attribute of action.
+     *
+     * @param  object     $action
+     * @param  array      $deptUsers
+     * @param  array      $shadowProducts
+     * @param  object|int $project
+     * @param  array      $projectIdList
+     * @access public
+     * @return object|bool
+     */
+    public function setObjectLink(object $action, array $deptUsers, array $shadowProducts, object|string $project = "", array $projectIdList = array()): object|bool
+    {
+        $action->objectLink  = $moduleName = $methodName = $params = '';
+        $action->objectLabel = zget($this->lang->action->objectTypes, $action->objectLabel);
+
+        $canSetLink   = $this->checkForSetLink($action, $projectIdList);
+        $canParseLink = strpos($action->objectLabel, '|') !== false;
+
+        if(!$canParseLink && !$canSetLink) return $action;
+        if($canParseLink)
+        {
+            list($objectLabel, $moduleName, $methodName, $vars) = explode('|', $action->objectLabel);
+            $action->objectLabel = $objectLabel;
+            $action->product     = trim((string)$action->product, ',');
+
+            if($action->objectType == 'module') return $action;
+            if(!$canSetLink) return $action;
+
+            if(in_array($action->objectType, array('program', 'project', 'product', 'execution')))
+            {
+                $objectTable   = zget($this->config->objectTables, $action->objectType);
+                $objectDeleted = $this->dao->select('deleted')->from($objectTable)->where('id')->eq($action->objectID)->fetch('deleted');
+                if($objectDeleted) return $action;
+            }
+
+            if(in_array($this->config->edition, array('max', 'ipd')) && strpos($this->config->action->assetType, ",{$action->objectType},") !== false && empty($action->project) && empty($action->product) && empty($action->execution))
+            {
+                $this->actionTao->processMaxDocObjectLink($action, $moduleName, $methodName, $vars);
+            }
+            else
+            {
+                if($action->objectType !== 'doclib') $params = $this->actionTao->getObjectLinkParams($action, $vars);
+                if($action->objectType == 'doclib')
+                {
+                    list($moduleName, $methodName, $params) = $this->actionTao->getDoclibTypeParams($action);
+                }
+                elseif($action->objectType == 'story')
+                {
+                    $story = $this->loadModel('story')->fetchByID($action->objectID);
+                    if(!empty($story))
+                    {
+                        $moduleName = $story->type;
+                        $methodName = 'view';
+                        if(isset($shadowProducts[$story->product]))
+                        {
+                            $moduleName = 'projectstory';
+                            $methodName = 'view';
+                        }
+                    }
+                    if(!empty($action->project) && !$project)
+                    {
+                        $project = $this->loadModel('project')->fetchById($action->project);
+                        if(empty($project->multiple))
+                        {
+                            $moduleName = 'execution';
+                            $methodName = 'storyView';
+                        }
+                    }
+                }
+            }
+        }
+
+        if($action->objectType == 'team') list($moduleName, $methodName, $params) = $this->getObjectTypeTeamParams($action);
+        if($action->objectType == 'story' && $this->config->vision == 'lite') list($moduleName, $methodName, $params) = array('projectstory', 'view', "storyID={$action->objectID}");
+        if($action->objectType == 'review') list($moduleName, $methodName, $params) = array('review', 'view', "reviewID={$action->objectID}");
+        if($action->objectType == 'build' && $this->app->tab == 'project') $moduleName = 'projectbuild';
+
+        if(empty($action->hasLink) && $this->actionTao->checkActionClickable($action, $deptUsers, $moduleName, $methodName)) $action->objectLink = helper::createLink($moduleName, $methodName, $params);
+
+        if(!empty($action->objectLink) && !empty($project) && empty($project->multiple)) $action->objectLink .= '#app=project';  // Set app for no multiple project.
+        if(!empty($action->objectLink) && $action->objectType == 'meeting')    $action->objectLink .= '#app=' . $this->app->tab; // Set app for meeting by open tab.
+        if($this->config->vision == 'lite' && $action->objectType == 'module') $action->objectLink .= '#app=project';
+        if($action->objectType == 'nc' && !empty($action->execution)) $action->objectLink .= '#app=execution';
+
+        return $action;
+    }
+
+    /**
+     * 根据给定的一段时间的参数计算日期的开始和结束。
+     * Compute the begin date and end date of a period.
+     *
+     * @param  string $period   all|today|yesterday|twodaysago|latest2days|thisweek|lastweek|thismonth|lastmonth
+     * @param  string $date
+     * @param  string $direction pre|next
+     * @access public
+     * @return array
+     */
+    public function computeBeginAndEnd(string $period, string $date, string $direction): array
+    {
+        $period = strtolower($period);
+
+        $beginDate = '';
+        $year = date('Y');
+
+        /* 查询所有动态时最多查询最后两年的数据。 */
+        /* When query all dynamic then query the data of the last two years at most. */
+        if($this->app->getMethodName() == 'dynamic') $year = $year - 1;
+        $beginDate   = $year . '-01-01';
+        $beginAndEnd = array('begin' => $beginDate, 'end' => FUTURE_DATE);
+
+        $this->app->loadClass('date');
+
+        $today      = date('Y-m-d');
+        $tomorrow   = date::tomorrow();
+        $yesterday  = date::yesterday();
+        $twoDaysAgo = date::twoDaysAgo();
+
+        if($period == 'today')       $beginAndEnd = array('begin' => $today,      'end' => $tomorrow);
+        if($period == 'yesterday')   $beginAndEnd = array('begin' => $yesterday,  'end' => $today);
+        if($period == 'twodaysago')  $beginAndEnd = array('begin' => $twoDaysAgo, 'end' => $yesterday);
+        if($period == 'latest3days') $beginAndEnd = array('begin' => $twoDaysAgo, 'end' => $tomorrow);
+
+        /* 如果时间段为周，则给结束日期增加结束时间。 */
+        /* If the period is by week, add the end time to the end date. */
+        if($period == 'thisweek' || $period == 'lastweek')
+        {
+            $func = "get$period";
+            extract(date::$func());
+            $beginAndEnd = array('begin' => $begin, 'end' => $end);
+        }
+
+        if($period == 'thismonth')  $beginAndEnd = date::getThisMonth();
+        if($period == 'lastmonth')  $beginAndEnd = date::getLastMonth();
+
+        /* 确切的日期。 */
+        /* The exact date. */
+        if($date)
+        {
+            if($direction == 'pre')   $beginAndEnd['begin'] = $date;
+            if($direction == 'next')  $beginAndEnd['end']   = $date;
+        }
+
+        return $beginAndEnd;
+    }
+
+    /**
+     * 渲染每一个action的历史记录。
+     * Render histories of every action.
+     *
+     * @param  string $objectType
+     * @param  int    $objectID
+     * @param  array  $histories
+     * @param  bool   $canChangeTag
+     * @access public
+     * @return string
+     */
+    public function renderChanges(string $objectType, int $objectID, array $histories, bool $canChangeTag = true): string
+    {
+        if(empty($histories)) return '';
+
+        $maxLength            = 0;          // The max length of fields names.
+        $historiesWithDiff    = array();    // To save histories without diff info.
+        $historiesWithoutDiff = array();    // To save histories with diff info.
+
+        /* 加载工作流新增的语言包。*/
+        if($this->config->edition != 'open')
+        {
+            $flow = $this->loadModel('workflow')->getByModule($objectType);
+            if(!empty($flow)) $this->loadModel('common')->loadCustomLang($objectType, 'view');
+        }
+
+        /* 区别是否有diff信息，以便于将有diff信息的字段放在最后。 */
+        /* Diff histories by hasing diff info or not. Thus we can to make sure the field with diff show at last. */
+        if($objectType == 'doctemplate') $this->app->loadLang('doc');
+        foreach($histories as $history)
+        {
+            $fieldName = $history->field;
+            $history->fieldLabel = isset($this->lang->{$objectType}) && isset($this->lang->{$objectType}->{$fieldName}) ? $this->lang->{$objectType}->{$fieldName} : $fieldName;
+            if($objectType == 'module')   $history->fieldLabel = $this->lang->tree->{$fieldName};
+            if($objectType == 'doctemplate') $history->fieldLabel = zget($this->lang->docTemplate, $fieldName, zget($this->lang->doc, $fieldName, $fieldName));
+            if($fieldName  == 'fileName') $history->fieldLabel = $this->lang->file->{$fieldName};
+            if(($length = strlen($history->fieldLabel)) > $maxLength) $maxLength = $length;
+            $history->diff ? $historiesWithDiff[] = $history : $historiesWithoutDiff[] = $history;
+        }
+        $histories = array_merge($historiesWithoutDiff, $historiesWithDiff);
+
+        /* 处理历史记录中的差别。 */
+        /* Process the diff of histories. */
+        $content = '';
+        foreach($histories as $history)
+        {
+            $history->fieldLabel = str_pad($history->fieldLabel, $maxLength, $this->lang->action->label->space);
+            if(strpos(',addDiff,removeDiff,', ",{$history->field},") !== false)
+            {
+                $fileLabel = isset($this->lang->file->common) ? $this->lang->file->common . ' ' : '';
+                $content .= sprintf($this->lang->action->desc->{$history->field}, strpos(',project,execution,', ",{$objectType},") !== false ? '' : $fileLabel, $history->diff) . '<br/>';
+            }
+            elseif($history->diff != '')
+            {
+                $history->diff      = str_replace(array('<ins>', '</ins>', '<del>', '</del>'), array('[ins]', '[/ins]', '[del]', '[/del]'), $history->diff);
+                $history->diff      = $history->field != 'subversion' && $history->field != 'git' ? htmlSpecialString($history->diff) : $history->diff;   // Keep the diff link.
+                $history->diff      = str_replace(array('[ins]', '[/ins]', '[del]', '[/del]'), array('<ins>', '</ins>', '<del>', '</del>'), $history->diff);
+                $history->diff      = nl2br($history->diff);
+                $history->noTagDiff = $canChangeTag ? preg_replace('/&lt;\/?([a-z][a-z0-9]*)[^\/]*\/?&gt;/Ui', '', $history->diff) : '';
+                $content .= sprintf($this->lang->action->desc->diff2, $history->fieldLabel, $history->noTagDiff, $history->diff);
+            }
+            else
+            {
+                $content .= sprintf($this->lang->action->desc->diff1, $history->fieldLabel, $history->old, $history->new);
+            }
+        }
+        return $content;
+    }
+
+    /**
+     * 打印每一个action的历史记录。
+     * Print histories of every action.
+     *
+     * @param  string $objectType
+     * @param  int    $objectID
+     * @param  array  $histories
+     * @param  bool   $canChangeTag
+     * @access public
+     * @return void
+     */
+    public function printChanges(string $objectType, int $objectID, array $histories, bool $canChangeTag = true): void
+    {
+        $content = $this->renderChanges($objectType, $objectID, $histories, $canChangeTag);
+        if(is_string($content)) echo $content;
+    }
+
+    /**
+     * 通过对象类型删除action。
+     * Delete action by objectType.
+     *
+     * @param  string $objectType
+     * @access public
+     * @return bool
+     */
+    public function deleteByType(string $objectType): bool
+    {
+        $this->dao->delete()->from(TABLE_ACTION)->where('objectType')->eq($objectType)->exec();
+
+        return !dao::isError();
+    }
+
+    /**
+     * 恢复一条记录。
+     * Undelete a record.
+     *
+     * @param  int    $actionID
+     * @access public
+     * @return string|bool
+     */
+    public function undelete(int $actionID): string|bool
+    {
+        if($actionID <= 0) return false;
+
+        $action = $this->getById($actionID);
+        if(!$action || $action->action != 'deleted') return false;
+
+        list($table, $orderby, $field, $queryKey) = $this->actionTao->getUndeleteParamsByObjectType($action->objectType);
+        if(empty($queryKey)) $queryKey = 'id';
+        $object = $this->actionTao->getObjectBaseInfo($table, array($queryKey => $action->objectID), $field, $orderby);
+        if(empty($object)) return false;
+
+        $result = $this->checkActionCanUndelete($action, $object);
+        if($result !== true) return $result;
+
+        /* 恢复被删除的元素。 */
+        /* Resotre deleted object. */
+        if($action->objectType == 'doc') $table = TABLE_DOC;
+        $this->dao->update($table)->set('deleted')->eq(0)->where('id')->eq($action->objectID)->exec();
+
+        if($action->objectType == 'module')
+        {
+            $module = $this->loadModel('tree')->getById($action->objectID);
+            if($module->type == 'doc' && $module->parent > 0)
+            {
+                $parentActionID = $this->dao->select('id')->from(TABLE_ACTION)->where('objectType')->eq('module')->andWhere('objectID')->eq($module->parent)->andWhere('action')->eq('deleted')->orderBy('id_desc')->fetch('id');
+                if($parentActionID) $this->undelete($parentActionID);
+            }
+        }
+
+        if($action->objectType == 'projectchange')
+        {
+            $reviewID = $this->dao->select('id')->from(TABLE_REVIEW)->where('type')->eq('projectchange')->andWhere('object')->eq($action->objectID)->andWhere('deleted')->eq('1')->fetch('id');
+            if($reviewID)
+            {
+                $reviewActionID = $this->dao->select('id')->from(TABLE_ACTION)->where('action')->eq('deleted')->andWhere('objectType')->eq('review')->andWhere('objectID')->eq($reviewID)->andWhere('extra')->eq(self::CAN_UNDELETED)->fetch('id');
+                if($reviewActionID) $this->undelete($reviewActionID);
+            }
+        }
+
+        if($action->objectType == 'review')
+        {
+            $review = $this->dao->select('*')->from(TABLE_REVIEW)->where('id')->eq($action->objectID)->fetch();
+            if($review->type == 'projectchange')
+            {
+                $projectchangeActionID = $this->dao->select('id')->from(TABLE_ACTION)->where('action')->eq('deleted')->andWhere('objectType')->eq('projectchange')->andWhere('objectID')->eq($review->object)->andWhere('extra')->eq(self::CAN_UNDELETED)->fetch('id');
+                if($projectchangeActionID) $this->undelete($projectchangeActionID);
+            }
+        }
+
+        if($action->objectType == 'deliverable')
+        {
+            $this->dao->update(TABLE_DELIVERABLE)->set('status')->eq('disabled')->where('id')->eq($action->objectID)->exec();
+        }
+
+        $this->recoverRelatedData($action, $object);
+
+        /* 还原已删除的需求时重算OR需求和业用研需的阶段。 */
+        /* The stage of recalculating OR requirements and industrial research needs when restoring deleted requirements. */
+        if(in_array($action->objectType, array('story', 'epic', 'requirement')))
+        {
+            $this->loadModel('story')->setStage($action->objectID);
+            $this->story->updateParentStatus($action->objectID);
+        }
+        if($action->objectType == 'demand' && !empty($object->parent)) $this->loadModel('demand')->updateParentDemandStage($object->parent);
+        if($action->objectType == 'release') $this->loadModel('system')->setSystemRelease((int)$object->system, $action->objectID);
+        if(in_array($action->objectType, array('release', 'build')) && !empty($object->system))
+        {
+            $systemActionID = $this->dao->select('id')->from(TABLE_ACTION)->where('objectType')->eq('system')->andWhere('objectID')->eq($object->system)->andWhere('action')->eq('deleted')->orderBy('id_desc')->fetch('id');
+            if($systemActionID) $this->undelete($systemActionID);
+        }
+
+        /* 在action表中更新action记录。 */
+        /* Update action record in action table. */
+        $this->dao->update(TABLE_ACTION)->set('extra')->eq(actionModel::BE_UNDELETED)->where('id')->eq($actionID)->exec();
+        $this->create($action->objectType, $action->objectID, 'undeleted');
+
+        return true;
+    }
+
+    /**
+     * 隐藏一个对象。
+     * Hide an object.
+     *
+     * @param  int    $actionID
+     * @access public
+     * @return bool
+     */
+    public function hideOne(int $actionID): bool
+    {
+        $action = $this->getById($actionID);
+        if(!$action || $action->action != 'deleted') return false;
+
+        $this->dao->update(TABLE_ACTION)->set('extra')->eq(self::BE_HIDDEN)->where('id')->eq($actionID)->exec();
+        $this->create($action->objectType, $action->objectID, 'hidden');
+
+        return !dao::isError();
+    }
+
+    /**
+     * 隐藏所有被删除的对象。
+     * Hide all deleted objects.
+     *
+     * @access public
+     * @return bool
+     */
+    public function hideAll(): bool
+    {
+        $this->dao->update(TABLE_ACTION)
+            ->set('extra')->eq(self::BE_HIDDEN)
+            ->where('action')->eq('deleted')
+            ->andWhere('extra')->eq(self::CAN_UNDELETED)
+            ->exec();
+
+        return !dao::isError();
+    }
+
+    /**
+     * 更新一个action的评论。
+     * Update comment of a action.
+     *
+     * @param  int    $actionID
+     * @param  object $newComment
+     * @access public
+     * @return bool
+     */
+    public function updateComment(int $actionID, object $newComment): bool
+     {
+         $action = $this->getById($actionID);
+         if(!$action) return false;
+
+         $action->files = $this->loadModel('file')->getByObject('comment', $actionID);
+
+         /* 只保留允许的标签。 */
+         /* Keep only allowed tags. */
+         $newComment->comment = fixer::stripDataTags($newComment->lastComment);
+
+         /* 处理评论内的图片。*/
+         /* Handle images in comment. */
+         $newComment = $this->loadModel('file')->processImgURL($newComment, 'comment', $newComment->uid);
+
+         $this->dao->update(TABLE_ACTION)
+             ->set('date')->eq(helper::now())
+             ->set('comment')->eq($newComment->comment)
+             ->where('id')->eq($actionID)
+             ->exec();
+
+         $this->file->updateObjectID($newComment->uid, $action->objectID, $action->objectType);
+         $this->file->processFileDiffsForObject('comment', $action, $newComment);
+         if(!empty($newComment->files))
+         {
+             $action->files = $newComment->files;
+             $this->dao->update(TABLE_ACTION)->set('files')->eq($newComment->files)->where('id')->eq($actionID)->exec();
+         }
+         $changes = common::createChanges($action, $newComment);
+         if($changes) $this->logHistory($actionID, $changes);
+
+         return true;
+    }
+
+    /**
+     * 根据actions构建日期组。
+     * Build date group by actions
+     *
+     * @param  array  $actions
+     * @param  string $direction
+     * @param  string $orderBy    date_desc|date_asc
+     * @access public
+     * @return array
+     */
+    public function buildDateGroup(array $actions, string $direction = 'next', string $orderBy = 'date_desc'): array
+    {
+        $dateGroup = array();
+        $firstTime = 0;
+        $timeStamp = 0;
+        foreach($actions as $action)
+        {
+            $timeStamp    = strtotime(isset($action->originalDate) ? $action->originalDate : $action->date);
+            $date         = date(DT_DATE3, $timeStamp);
+            $action->time = date(DT_TIME2, $timeStamp);
+            $dateGroup[$date][] = $action;
+            if(empty($firstTime)) $firstTime = $timeStamp;
+        }
+
+        /* 将日期的顺序修改正确。 */
+        /* Modify date to the corrret order. */
+        if($dateGroup && $firstTime < $timeStamp)
+        {
+            $dateGroup = array_reverse($dateGroup);
+            foreach($dateGroup as $key => $dateItem) $dateGroup[$key] = array_reverse($dateItem);
+        }
+        return $dateGroup;
+    }
+
+    /**
+     * 检查是否有上一条或者下一条。
+     * Check Has pre or next.
+     *
+     * @param  string $date
+     * @param  string $direction
+     * @param  string $period
+     * @access public
+     * @return bool
+     */
+    public function hasPreOrNext(string $date, string $direction = 'next', string $period = 'all'): bool
+    {
+        if(empty($date)) return false;
+
+        $condition = $this->session->actionQueryCondition;
+        if(empty($condition)) return false;
+
+        $beginAndEnd = $this->computeBeginAndEnd($period, '', $direction);
+        $hasProduct = preg_match('/t2\.([`"]?)product/', $condition);
+        $condition  = preg_replace("/AND +`?date`?\s*(<|>|<=|>=)\s*'\d{4}\-\d{2}\-\d{2}'/", '', $condition);
+        $actions    = $this->dao->select('action.id')->from(TABLE_ACTION)->alias('action')
+            ->beginIF($hasProduct)->leftJoin(TABLE_ACTIONPRODUCT)->alias('t2')->on('action.id=t2.action')->fi()
+            ->where($condition)
+            ->andWhere('`date`' . ($direction == 'next' ? '<' : '>') . "'{$date}'")
+            ->beginIF($direction == 'next' && $beginAndEnd['begin'] != EPOCH_DATE)->andWhere('date')->ge($beginAndEnd['begin'])->fi()
+            ->beginIF($direction != 'next' && $beginAndEnd['end'] != FUTURE_DATE)->andWhere('date')->le($beginAndEnd['end'])->fi()
+            ->limit(1)
+            ->fetchAll();
+
+        return count($actions) > 0;
+    }
+
+    /**
+     * 保存全局搜索对象索引信息。
+     * Save global search object index information.
+     *
+     * @param  string $objectType
+     * @param  int    $objectID
+     * @param  string $actionType
+     * @access public
+     * @return bool
+     */
+    public function saveIndex(string $objectType, int $objectID, string $actionType): bool
+    {
+        $this->loadModel('search');
+        if($this->config->edition != 'open' && $this->app->isServing()) $this->loadModel('workflow')->appendSearchConfig();
+
+        $actionType = strtolower($actionType);
+        if(!isset($this->config->search->fields->{$objectType})) return false;
+
+        $isCommentedAction = $actionType == 'commented';
+        if(strpos($this->config->search->buildAction, ",{$actionType},") === false && !$isCommentedAction && empty($_POST['comment'])) return false;
+        if($isCommentedAction && empty($_POST['actioncomment'])) return false;
+        if($actionType == 'deleted' || $actionType == 'erased') return $this->search->deleteIndex($objectType, $objectID);
+
+        $field = $this->config->search->fields->{$objectType};
+        $query = $this->search->buildIndexQuery($objectType, false);
+        $data  = $query->andWhere('t1.' . $field->id)->eq($objectID)->fetch();
+        if(empty($data)) return false;
+
+        $data->comment = '';
+        if($objectType == 'effort' && $data->objectType == 'task') return false;
+        if($objectType == 'case')
+        {
+            $caseStep     = $this->dao->select('`desc`,`expect`')->from(TABLE_CASESTEP)->where('`case`')->eq($objectID)->andWhere('version')->eq($data->version)->fetchAll();
+            $data->desc   = '';
+            $data->expect = '';
+            foreach($caseStep as $step)
+            {
+                $data->desc   .= $step->desc . "\n";
+                $data->expect .= $step->expect . "\n";
+            }
+        }
+
+        $actions = $this->dao->select('*')->from(TABLE_ACTION)
+            ->where('objectType')->eq($objectType)
+            ->andWhere('objectID')->eq($objectID)
+            ->orderBy('id asc')
+            ->fetchAll();
+        foreach($actions as $action)
+        {
+            if($action->action == 'opened') $data->{$field->addedDate} = $action->date;
+            $data->{$field->editedDate} = $action->date;
+            if(!empty($action->comment)) $data->comment .= $action->comment . "\n";
+        }
+
+        $this->search->saveIndex($objectType, $data);
+
+        return !dao::isError();
+    }
+
+    /**
+     * 打印API（极狐）对象上的操作。
+     * Print actions of an object for API(JIHU).
+     *
+     * @param  object    $action
+     * @access public
+     * @return false|void
+     */
+    public function printActionForGitLab(object $action)
+    {
+        if(!isset($action->objectType) || !isset($action->action)) return false;
+
+        $actionType = strtolower($action->action);
+        if(isset($this->lang->action->apiTitle->{$actionType}) && isset($action->extra))
+        {
+            /* 如果extra列是一个用户名，则组装链接。 */
+            /* If extra column is a username, then assemble link to that. */
+            if($action->action == "assigned")
+            {
+                $user = $this->loadModel('user')->getById($action->extra);
+                if($user)
+                {
+                    $url = helper::createLink('user', 'profile', "userID={$user->id}");
+                    $action->extra = "<a href='{$url}' target='_blank'>{$action->extra}</a>";
+                }
+            }
+
+            echo sprintf($this->lang->action->apiTitle->{$actionType}, $action->extra);
+        }
+        elseif(isset($this->lang->action->apiTitle->{$actionType}) && !isset($action->extra))
+        {
+            echo $this->lang->action->apiTitle->{$actionType};
+        }
+        else
+        {
+            echo $actionType;
+        }
+    }
+
+    /**
+     * 处理操作记录用于API。
+     * Process action for API.
+     *
+     * @param  array|object $actions
+     * @param  array|object $users
+     * @param  array|object $objectLang
+     * @access public
+     * @return array
+     */
+    public function processActionForAPI(array|object $actions, array|object $users = array(), array|object $objectLang = array()): array
+    {
+        if(is_object($actions))    $actions    = (array)$actions;
+        if(is_object($users))      $users      = (array)$users;
+        if(is_object($objectLang)) $objectLang = (array)$objectLang;
+
+        foreach($actions as $action)
+        {
+            $action->actor = zget($users, $action->actor);
+            if($action->action == 'assigned') $action->extra = zget($users, $action->extra);
+            if(strpos($action->actor, ':') !== false) $action->actor = substr($action->actor, strpos($action->actor, ':') + 1);
+
+            ob_start();
+            $this->printAction($action);
+            $action->desc = ob_get_contents();
+            ob_end_clean();
+
+            if($action->history)
+            {
+                foreach($action->history as $i => $history)
+                {
+                    $history->fieldName  = zget($objectLang, $history->field);
+                    $action->history[$i] = $history;
+                }
+            }
+        }
+        return array_values($actions);
+    }
+
+    /**
+     * 处理动态用于API。
+     * Process dynamic for API.
+     *
+     * @param  array  $dynamics
+     * @access public
+     * @return array
+     */
+    public function processDynamicForAPI(array $dynamics): array
+    {
+        /* 获取用户列表。 */
+        /* Get user list. */
+        $users = $this->loadModel('user')->getList();
+        $simplifyUsers = array();
+        foreach($users as $user)
+        {
+            $simplifyUser = new stdclass();
+            $simplifyUser->id       = $user->id;
+            $simplifyUser->account  = $user->account;
+            $simplifyUser->realname = $user->realname;
+            $simplifyUser->avatar   = $user->avatar;
+            $simplifyUsers[$user->account] = $simplifyUser;
+        }
+
+        $actions = array();
+        foreach($dynamics as $dynamic)
+        {
+            if($dynamic->objectType == 'user') continue; //过滤掉用户动态。
+
+            $simplifyUser = zget($simplifyUsers, $dynamic->actor, '');
+            $actor = $simplifyUser;
+            if(empty($simplifyUser))
+            {
+                $actor = new stdclass();
+                $actor->id       = 0;
+                $actor->account  = $dynamic->actor;
+                $actor->realname = $dynamic->actor;
+                $actor->avatar   = '';
+            }
+
+            $dynamic->actor = $actor;
+            $actions[]      = $dynamic;
+        }
+
+        return $actions;
+    }
+
+    /**
+     * 构建搜索表单数据。
+     * Build search form data.
+     *
+     * @param  int    $queryID
+     * @param  string $actionURL
+     * @access public
+     * @return void
+     */
+    public function buildTrashSearchForm(int $queryID, string $actionURL): void
+    {
+        $this->config->trash->search['actionURL'] = $actionURL;
+        $this->config->trash->search['queryID']   = $queryID;
+
+        $this->loadModel('search')->setSearchParams($this->config->trash->search);
+    }
+
+    /**
+     * 恢复阶段。
+     * Restore stages.
+     *
+     * @param  array  $stageList
+     * @access public
+     * @return bool
+     */
+    public function restoreStages(array $stageList): bool
+    {
+        $deletedActions = $this->dao->select('*')->from(TABLE_ACTION)
+            ->where('objectID')->in(array_keys($stageList))
+            ->andWhere('objectType')->eq('execution')
+            ->andWhere('action')->eq('deleted')
+            ->orderBy('id_desc')
+            ->fetchGroup('objectID');
+
+        foreach($stageList as $stageID)
+        {
+            $deletedAction = $deletedActions[$stageID][0];
+            $this->dao->update(TABLE_EXECUTION)->set('deleted')->eq('0')->where('id')->eq($stageID)->exec();
+            $this->dao->update(TABLE_ACTION)->set('extra')->eq(actionModel::BE_UNDELETED)->where('id')->eq($deletedAction->id)->exec();
+            $this->create($deletedAction->objectType, $deletedAction->objectID, 'undeleted');
+            if(dao::isError()) return false;
+        }
+        return true;
+    }
+
+    /**
+     * 获取属性相同的对象。
+     * Get repeat object.
+     *
+     * @param  object $action
+     * @param  string $table
+     * @access public
+     * @return array
+     */
+    public function getRepeatObject(object $action, string $table): array
+    {
+        $object = $this->dao->select('*')->from($table)->where('id')->eq($action->objectID)->fetch();
+        if($action->objectType == 'product')
+        {
+            $programID    = isset($object->program) ? $object->program : 0;
+            $repeatObject = $this->dao->select('*')->from(TABLE_PRODUCT)
+                ->where('id')->ne($action->objectID)
+                ->andWhere("(name = '{$object->name}' AND program = {$programID})", true)
+                ->beginIF($object->code)->orWhere("code = '{$object->code}'")->fi()
+                ->markRight(1)
+                ->andWhere('deleted')->eq('0')
+                ->fetch();
+        }
+        elseif(in_array($action->objectType, array('program', 'project', 'execution')))
+        {
+            $sprintProject = isset($object->project) ? $object->project : 0;
+            $repeatObject  = $this->dao->select('*')->from(TABLE_PROJECT)
+                ->where('id')->ne($action->objectID)
+                ->beginIF($action->objectType == 'program' || $action->objectType == 'project')->andWhere("(name = '{$object->name}' AND parent = {$object->parent})", true)->fi()
+                ->beginIF($action->objectType == 'execution')->andWhere("(name = '{$object->name}' AND project = {$sprintProject})", true)->fi()
+                ->beginIF($action->objectType == 'project' && $object->code)->orWhere("(code = '{$object->code}' AND model = '{$object->model}')")->fi()
+                ->beginIF($action->objectType == 'execution' && $object->code)->orWhere("code = '{$object->code}'")->fi()
+                ->markRight(1)
+                ->beginIF($action->objectType == 'program')->andWhere('type')->eq('program')->fi()
+                ->beginIF($action->objectType == 'project')->andWhere('type')->eq('project')->fi()
+                ->beginIF($action->objectType == 'execution')->andWhere('type')->in('sprint,stage,kanban')->fi()
+                ->andWhere('deleted')->eq('0')
+                ->fetch();
+        }
+        else
+        {
+            $objectNameFields = $this->config->action->objectNameFields[$action->objectType];
+            $repeatObject     = $this->dao->select('*')->from($table)->where('id')->ne($action->objectID)->andWhere('deleted')->eq('0')->andWhere($objectNameFields)->eq($object->name)->fetch();
+        }
+
+        return array($repeatObject, $object);
+    }
+
+    /**
+     * 获取和需求属性相近的对象。
+     * Get like object.
+     *
+     * @param  string $table
+     * @param  string $columns
+     * @param  string $param
+     * @param  string $value
+     * @access public
+     * @return array
+     */
+    public function getLikeObject(string $table, string $columns, string $param, string $value): array
+    {
+        return $this->dao->select($columns)->from($table)->where($param)->like($value)->fetchPairs();
+    }
+
+    /**
+     * 通过id更新对象。
+     * Update object by id.
+     *
+     * @param  string $table
+     * @param  int    $id
+     * @param  array  $params
+     * @access public
+     * @return bool
+     */
+    public function updateObjectByID(string $table, int $id, array $params): bool
+    {
+        $updateParams = array();
+        foreach($params as $key => $value) $updateParams[] = '`' . $key . '`' . '="' . $value . '"';
+        $this->dao->update($table)->set(implode(',', $updateParams))->where('id')->eq($id)->exec();
+
+        return !dao::isError();
+    }
+
+    /**
+     * 根据执行id获取attribute属性。
+     * Get attribute by execution id.
+     *
+     * @param  int    $executionID
+     * @access public
+     * @return string|bool
+     */
+    public function getAttributeByExecutionID(int $executionID): string|bool
+    {
+        return $this->dao->select('attribute')->from(TABLE_EXECUTION)->where('id')->eq($executionID)->fetch('attribute');
+    }
+
+    /**
+     * 根据id获取已经删除的阶段。
+     * Get deleted stage by ids.
+     *
+     * @param  array $list
+     * @access public
+     * @return array|bool
+     */
+    public function getDeletedStagedByList(array $list): array|bool
+    {
+        return $this->dao->select('*')->from(TABLE_EXECUTION)->where('id')->in($list)->andWhere('deleted')->eq(1)->andWhere('type')->eq('stage')->orderBy('id_asc')->fetchAll('id');
+    }
+
+    /**
+     * 更新阶段的attribute属性。
+     * Update stage attribute.
+     *
+     * @param  string $attribute
+     * @param  array  $executions
+     * @access public
+     * @return bool
+     */
+    public function updateStageAttribute(string $attribute, array $executions): bool
+    {
+        $this->dao->update(TABLE_EXECUTION)->set('attribute')->eq($attribute)->where('id')->in($executions)->exec();
+
+        return !dao::isError();
+    }
+
+    /**
+     * 获取动态对象关联的数据。
+     * Get action object related data.
+     *
+     * @param  string $table
+     * @param  string $objectType
+     * @param  array  $objectIdList
+     * @param  string $field
+     * @param  array  $users
+     * @param  array  $requirements
+     * @param  array  $epics
+     * @access public
+     * @return array
+     */
+    public function getObjectRelatedData(string $table, string $objectType, array $objectIdList, string $field, array $users, array $requirements, array $epics): array
+    {
+        $objectName     = array();
+        $relatedProject = array();
+        if($table == TABLE_TODO)
+        {
+            $todos = $this->dao->select("id, {$field} AS name, account, private, type, objectID")->from($table)->where('id')->in($objectIdList)->orderBy('id_asc')->fetchAll();
+            foreach($todos as $todo)
+            {
+                /* Get related object name. */
+                if(in_array($todo->type, array('task', 'bug', 'story', 'testtask'))) $todo->name = $this->dao->findById($todo->objectID)->from($this->config->objectTables[$todo->type])->fetch($this->config->action->objectNameFields[$todo->type]);
+                $objectName[$todo->id] = $todo->private == 1 && $todo->account != $this->app->user->account ? $this->lang->todo->thisIsPrivate : $todo->name;
+            }
+        }
+        elseif(strpos(",{$this->config->action->needGetProjectType},", ",{$objectType},") !== false || $objectType == 'project' || $objectType == 'execution')
+        {
+            $objectInfo = $this->dao->select("id, project, {$field} AS name")->from($table)->where('id')->in($objectIdList)->filterTpl(false)->orderBy('id_asc')->fetchAll();
+            foreach($objectInfo as $object)
+            {
+                $objectName[$object->id]     = $objectType == 'gapanalysis' ? zget($users, $object->name) : $object->name; // Get user realname if objectType is gapanalysis.
+                $relatedProject[$object->id] = $object->project;
+            }
+        }
+        elseif($objectType == 'story' || $objectType == 'team') // Get story or team related data.
+        {
+            if($objectType == 'team') $table = TABLE_PROJECT;
+            $objectField = $objectType == 'story' ? 'id,title,type' : 'id,team AS title,type';
+            $objectInfo  = $this->dao->select($objectField)->from($table)->where('id')->in($objectIdList)->filterTpl(false)->orderBy('id_asc')->fetchAll();
+            foreach($objectInfo as $object)
+            {
+                $objectName[$object->id] = $object->title;
+                if($object->type == 'requirement') $requirements[$object->id]   = $object->id;
+                if($object->type == 'epic')        $epics[$object->id]          = $object->id;
+                if($object->type == 'project')     $relatedProject[$object->id] = $object->id;
+            }
+        }
+        elseif($objectType == 'stakeholder') // Get stakeholder realname.
+        {
+            $objectName = $this->dao->select("id, {$field} AS name")->from($table)->where('id')->in($objectIdList)->orderBy('id_asc')->fetchPairs();
+            foreach($objectName as $id => $name) $objectName[$id] = zget($users, $name);
+        }
+        elseif($objectType == 'pivot')
+        {
+            $objectName = $this->dao->select("pivot, {$field} AS name")->from($table)->where('pivot')->in($objectIdList)->orderBy('pivot_asc')->fetchPairs();
+        }
+        else
+        {
+            $objectName = $this->dao->select("id, {$field} AS name")->from($table)->where('id')->in($objectIdList)->filterTpl(false)->orderBy('id_asc')->fetchPairs();
+        }
+        return array($objectName, $relatedProject, $requirements, $epics);
+    }
+
+    /**
+     * 获取对象类型为team的link元素。
+     * Get link element of objecttype team.
+     *
+     * @param  object    $action
+     * @access protected
+     * @return array
+     */
+    protected function getObjectTypeTeamParams(object $action): array
+    {
+        if($action->project) return array('project', 'team', 'projectID=' . $action->project);
+        if($action->execution) return array('execution', 'team', 'executionID=' . $action->execution);
+
+        return array('', '', '');
+    }
+
+    /**
+     * 检查action是否可以被还原。
+     * Check action can be undeleted.
+     *
+     * @param  object      $action
+     * @param  object      $object
+     * @access protected
+     * @return string|bool
+     */
+    protected function checkActionCanUndelete(object $action, object $object): string|bool
+    {
+        if($action->objectType == 'execution')
+        {
+            if($object->deleted && empty($object->project)) return $this->lang->action->undeletedTips;
+            $projectCount = $this->dao->select('COUNT(1) AS count')->from(TABLE_PROJECT)->where('id')->eq($object->project)->andWhere('deleted')->eq('0')->fetch('count');
+            if((int)$projectCount == 0) return $this->lang->action->executionNoProject;
+        }
+        elseif($action->objectType == 'repo' && in_array($object->SCM, array('Gitlab', 'Gitea', 'Gogs')))
+        {
+            $server = $this->dao->select('*')->from(TABLE_PIPELINE)->where('id')->eq($object->serviceHost)->andWhere('deleted')->eq('0')->fetch();
+            if(empty($server)) return $this->lang->action->repoNoServer;
+        }
+        elseif($action->objectType == 'module')
+        {
+            $repeatName = $this->loadModel('tree')->checkUnique($object);
+            if($repeatName) return sprintf($this->lang->tree->repeatName, $repeatName);
+
+            if($object->parent > 0 && $object->type != 'doc')
+            {
+                $parent = $this->dao->select('*')->from(TABLE_MODULE)->where('id')->eq($object->parent)->fetch();
+                if($parent && $parent->deleted == '1') return $this->lang->action->refusemodule;
+            }
+        }
+        elseif($action->objectType == 'case' && $object->scene)
+        {
+            $scene = $this->dao->select('*')->from(TABLE_SCENE)->where('id')->eq($object->scene)->fetch();
+            if($scene->deleted) return $this->lang->action->refusecase;
+        }
+        elseif($action->objectType == 'scene' && $object->parent)
+        {
+            $scenerow = $this->dao->select('*')->from(TABLE_SCENE)->where('id')->eq($object->parent)->fetch();
+            if($scenerow->deleted) return $this->lang->action->refusescene;
+        }
+        elseif($action->objectType == 'reviewissue' && !empty($object->review))
+        {
+            $review = $this->dao->select('*')->from(TABLE_REVIEW)->where('id')->eq($object->review)->fetch();
+            if($review->deleted)
+            {
+                $this->app->loadLang('reviewissue');
+                return $this->lang->reviewissue->undeleteAction;
+            }
+        }
+        elseif($action->objectType == 'kanban' && $object->space)
+        {
+            $kanbanSpace = $this->dao->select('*')->from(TABLE_KANBANSPACE)->where('id')->eq($object->space)->fetch();
+            if($kanbanSpace->deleted) return $this->lang->action->refusekanban;
+        }
+
+        return true;
+    }
+
+    /**
+     * 恢复被删除对象的关联数据。
+     * Recover related data of deleted object.
+     *
+     * @param  object    $action
+     * @param  object    $object
+     * @access protected
+     * @return void
+     */
+    protected function recoverRelatedData(object $action, object $object): void
+    {
+        if($action->objectType == 'release' && $object->shadow) $this->dao->update(TABLE_BUILD)->set('deleted')->eq(0)->where('id')->eq($object->shadow)->exec();
+
+        if(in_array($action->objectType, array('program', 'project', 'execution', 'product')))
+        {
+            $objectType = $action->objectType == 'execution' ? 'sprint' : $action->objectType;
+            if($object->acl != 'open') $this->loadModel('user')->updateUserView(array($object->id), $objectType);
+
+            /* 恢复隐藏产品。 */
+            /* Resotre hidden products. */
+            if($action->objectType == 'project' && !$object->hasProduct)
+            {
+                $productID = $this->loadModel('product')->getProductIDByProject($object->id);;
+                $this->dao->update(TABLE_PRODUCT)->set('name')->eq($object->name)->set('deleted')->eq(0)->where('id')->eq($productID)->exec();
+            }
+
+            /* 恢复隐藏执行。 */
+            /* Resotre hidden execution. */
+            if($action->objectType == 'project' && empty($object->multiple)) $this->dao->update(TABLE_EXECUTION)->set('deleted')->eq('0')->where('project')->eq($object->id)->andWhere('multiple')->eq('0')->exec();
+        }
+        if($action->objectType == 'doc' && $object->files) $this->dao->update(TABLE_FILE)->set('deleted')->eq('0')->where('id')->in($object->files)->exec();
+
+        /* 当还原项目或者执行的时候恢复用户的产品权限。 */
+        /* Revert userView products when undelete project or execution. */
+        if($action->objectType == 'project' || $action->objectType == 'execution')
+        {
+            $products = $this->loadModel('product')->getProducts($object->id, 'all', '', false);
+            if(!empty($products)) $this->loadModel('user')->updateUserView(array_keys($products), 'product');
+
+            if($action->objectType == 'execution')
+            {
+                $execution = $this->dao->select('id, type, project, grade, parent, status, deleted')->from(TABLE_EXECUTION)->where('id')->eq($action->objectID)->fetch();
+                $this->loadModel('common')->syncExecutionByChild($execution);
+            }
+        }
+
+        /* 还原产品或者项目的时候恢复文档库。 */
+        /* Revert doclib when undelete product or project. */
+        if($action->objectType == 'execution' || $action->objectType == 'product') $this->dao->update(TABLE_DOCLIB)->set('deleted')->eq(0)->where($action->objectType)->eq($action->objectID)->exec();
+
+        /* 还原子任务的时候更新任务状态。 */
+        /* Update task status when undelete child task. */
+        if($action->objectType == 'task')
+        {
+            $task = $this->loadModel('task')->fetchByID((int)$action->objectID);
+            if($task->parent > 0)
+            {
+                $parentConsumed = $this->dao->select('consumed')->from(TABLE_TASK)->where('id')->eq($task->parent)->fetch('consumed');
+                if($parentConsumed)
+                {
+                    $this->dao->update(TABLE_TASK)->set('parent')->eq('0')->set('path')->eq(",{$task->id},")->where('id')->eq($task->id)->exec();
+                }
+                else
+                {
+                    $this->loadModel('task')->updateParent($task, false);
+                }
+            }
+        }
+    }
+
+    /**
+     * 执行和项目相关操作记录的extra信息。
+     * Build execution and project action extra info.
+     *
+     * @param  object    $action
+     * @access protected
+     * @return void
+     */
+    protected function processExecutionAndProjectActionExtra(object $action): void
+    {
+        $this->app->loadLang('execution');
+        $linkedProducts = $this->dao->select('id,name')->from(TABLE_PRODUCT)->where('id')->in($action->extra)->fetchPairs('id', 'name');
+        $action->extra  = '';
+        if($linkedProducts && $this->config->vision == 'rnd')
+        {
+            foreach($linkedProducts as $productID => $productName) $linkedProducts[$productID] = html::a(helper::createLink('product', 'browse', "productID={$productID}"), "#{$productID} {$productName}");
+            $action->extra = sprintf($this->lang->execution->action->extra, '<strong>' . join(', ', $linkedProducts) . '</strong>');
+        }
+    }
+
+    /**
+     * 获取动态的数量。
+     * Get dynamic count.
+     *
+     * @access public
+     * @return int
+     */
+    public function getDynamicCount($period = 'all'): int
+    {
+        $condition = $this->session->actionQueryCondition;
+        if(empty($condition)) return 0;
+
+        $table       = $this->actionTao->getActionTable($period);
+        $hasProduct  = preg_match('/t2\.([`"]?)product/', $condition);
+        $useIndex    = $hasProduct && strpos('mysql,oceanbase', $this->config->db->driver) !== false ? ' USE INDEX (`vision_date`)' : ''; // 关联产品时指定索引以提高查询性能。Specify index to improve query performance when associated with product.
+        $beginAndEnd = $this->computeBeginAndEnd($period, '', 'next');
+        $condition   = preg_replace("/AND +`?date`? +(<|>|<=|>=) +'\d{4}\-\d{2}\-\d{2}'/", '', $condition);
+
+        $actions = $this->dao->select('action.id')->from($table)->alias('action' . $useIndex)
+            ->beginIF($hasProduct)->leftJoin(TABLE_ACTIONPRODUCT)->alias('t2')->on('action.id=t2.action')->fi()
+            ->where($condition)
+            ->beginIF($beginAndEnd['begin'] != EPOCH_DATE)->andWhere('date')->ge($beginAndEnd['begin'])->fi()
+            ->beginIF($beginAndEnd['end'] != FUTURE_DATE)->andWhere('date')->le($beginAndEnd['end'])->fi()
+            ->limit(self::MAXCOUNT)
+            ->fetchAll('id');
+        return count($actions);
+    }
+
+    /**
+     * 清除一个月前的动态记录。
+     * Clear dynamic records older than one month.
+     *
+     * @access public
+     * @return bool
+     */
+    public function cleanActions(): bool
+    {
+        $cleanDate = zget($this->app->config->global, 'cleanActionsDate', '');
+        $today     = helper::today();
+        if($cleanDate == $today) return true;
+
+        $this->loadModel('setting')->setItem('system.common.global.cleanActionsDate', $today);
+
+        $lastMonth = date('Y-m-d', strtotime('-1 month'));
+        $this->dao->delete()->from(TABLE_ACTIONRECENT)->where('date')->lt($lastMonth)->exec();
+        return !dao::isError();
+    }
+
+    /**
+     * 获取最早的动态记录。
+     * Get the first action.
+     *
+     * @access public
+     * @return object|bool
+     */
+    public function getFirstAction(): object|bool
+    {
+        return $this->dao->select('*')->from(TABLE_ACTION)->orderBy('id')->limit(1)->fetch();
+    }
+
+    /**
+     * 检查该日期是否还有的更多日志。
+     * Check has more actions for this date.
+     *
+     * @param  object  $lastAction
+     * @access public
+     * @return bool
+     */
+    public function hasMoreAction(object $lastAction): bool
+    {
+        $condition = $this->session->actionQueryCondition;
+        if(empty($condition)) return false;
+
+        $hasProduct = preg_match('/t2\.([`"]?)product/', $condition);
+        $lastDate   = substr($lastAction->originalDate, 0, 10);
+        $condition  = preg_replace("/AND +`?date`? +(<|>|<=|>=) +'\d{4}\-\d{2}\-\d{2}'/", '', $condition);
+        $actions    = $this->dao->select('action.id')->from(TABLE_ACTION)->alias('action')
+            ->beginIF($hasProduct)->leftJoin(TABLE_ACTIONPRODUCT)->alias('t2')->on('action.id=t2.action')->fi()
+            ->where($condition)
+            ->andWhere("`date`")->ge($lastDate)
+            ->andWhere("`date`")->lt($lastDate . ' 23:59:59')
+            ->andWhere("`date` < '{$lastAction->originalDate}'")
+            ->orderBy('date_desc')
+            ->limit(1)
+            ->fetchAll();
+        return count($actions) > 0;
+    }
+
+    /**
+     * 获取该日期的更多日志。
+     * Get more actions for this date.
+     *
+     * @param  int    $lastActionID
+     * @param  int    $limit
+     * @access public
+     * @return array
+     */
+    public function getMoreActions(int $lastActionID, int $limit = 100): array
+    {
+        $condition = $this->session->actionQueryCondition;
+        if(empty($condition)) return array();
+
+        $hasProduct = preg_match('/t2\.([`"]?)product/', $condition);
+        $lastAction = $this->dao->select('*')->from(TABLE_ACTION)->where('id')->eq($lastActionID)->fetch();
+        $lastDate   = substr($lastAction->date, 0, 10);
+        $actions    = $this->dao->select('action.*')->from(TABLE_ACTION)->alias('action')
+            ->beginIF($hasProduct)->leftJoin(TABLE_ACTIONPRODUCT)->alias('t2')->on('action.id=t2.action')->fi()
+            ->where($condition)
+            ->andWhere("`date`")->ge($lastDate)
+            ->andWhere("`date`")->lt($lastDate . ' 23:59:59')
+            ->andWhere("`date` < '{$lastAction->date}'")
+            ->orderBy('date_desc')
+            ->limit($limit)
+            ->fetchAll('id', false);
+
+        $actions = $this->transformActions($actions);
+        foreach($actions as $action)
+        {
+            $timeStamp    = strtotime(isset($action->originalDate) ? $action->originalDate : $action->date);
+            $action->time = date(DT_TIME2, $timeStamp);
+        }
+        return array_values($actions);
+    }
+}
